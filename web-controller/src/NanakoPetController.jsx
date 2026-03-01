@@ -22,7 +22,11 @@ export default function NanakoPetController() {
     mood: 85,      // 心情值
   });
 
-  // 日志流
+  // 聊天对话记录 (至多10条)
+  const [messages, setMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+
+  // 终端日志(系统级)保留3条
   const [logs, setLogs] = useState(["[SYS] 等待连接中..."]);
 
   // WebSocket 引用
@@ -63,13 +67,21 @@ export default function NanakoPetController() {
 
       ws.onmessage = (event) => {
         try {
-          // 接收来自服务器的 JSON 广播数据
           const data = JSON.parse(event.data);
-          addLog(`[RECV] ${data.type}`);
 
-          // 假设服务器会广播宠物属性更新事件
           if (data.type === 'SYNC_STATS' && data.payload) {
             setStats(prev => ({ ...prev, ...data.payload }));
+          }
+          else if (data.type === 'text') {
+            // 接收回复气泡
+            addMessage('nanako', data.text);
+          }
+          else if (data.type === 'status') {
+            // 状态同步
+            addLog(`[STATUS] ${data.message}`);
+          }
+          else {
+            addLog(`[RECV] ${data.type}`);
           }
         } catch (err) {
           console.error("解析消息失败", err);
@@ -97,23 +109,56 @@ export default function NanakoPetController() {
     if (wsRef.current) wsRef.current.close();
   };
 
-  // 发送动作指令给服务器
-  const sendAction = (actionType) => {
+  // 发送动作指令 ("interaction")
+  const sendAction = (actionName, index = 0, area = 'Body') => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const payload = {
-        type: 'TRIGGER_ACTION',
-        timestamp: Date.now(),
-        data: { action: actionType }
+        type: 'interaction',
+        payload: {
+          area: area,
+          action: actionName,
+          index: index,
+          timestamp: Date.now()
+        }
       };
       wsRef.current.send(JSON.stringify(payload));
-      addLog(`[ACTION] 已发送：${actionType}`);
+      addLog(`[ACTION] ${actionName}`);
 
-      // 前端表现层模拟：点击后直接给予简单的正向反馈（实际以服务端广播的 SYNC_STATS 为准）
-      if (actionType === 'feed') setStats(s => ({ ...s, hunger: Math.min(100, s.hunger + 10) }));
-      if (actionType === 'chat') setStats(s => ({ ...s, mood: Math.min(100, s.mood + 5) }));
+      // 前端表现层模拟：点击后给予本地反馈
+      if (actionName === 'feed') setStats(s => ({ ...s, hunger: Math.min(100, s.hunger + 10) }));
     } else {
       addLog("[ERR] 离线状态无法发送");
     }
+  };
+
+  // 发送聊天指令 ("chat")
+  const sendChat = (e) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      const payload = {
+        type: 'chat',
+        payload: {
+          text: chatInput,
+          timestamp: Date.now()
+        }
+      };
+      wsRef.current.send(JSON.stringify(payload));
+
+      addMessage('user', chatInput);
+      setChatInput('');
+    } else {
+      addLog("[ERR] 离线状态无法发送");
+    }
+  };
+
+  // 添加聊天历史记录 (保留最新10条)
+  const addMessage = (sender, text) => {
+    setMessages(prev => {
+      const newMessages = [...prev, { id: Date.now(), sender, text }];
+      return newMessages.slice(-10);
+    });
   };
 
   // 辅助函数：追加日志 (保留最新3条)
@@ -127,14 +172,12 @@ export default function NanakoPetController() {
 
   // 像素风进度条组件
   const PixelProgressBar = ({ label, value, colorClass, icon }) => (
-    <div className="mb-3">
-      <div className="flex justify-between text-xs font-bold text-pink-900 mb-1">
+    <div className="mb-2">
+      <div className="flex justify-between text-[10px] font-bold text-pink-900 mb-[2px]">
         <span>{icon} {label}</span>
         <span>{value}/100</span>
       </div>
-      {/* 槽位背景 */}
-      <div className="h-4 w-full bg-pink-100 border-2 border-pink-400 p-[2px] rounded-sm">
-        {/* 实际进度条 */}
+      <div className="h-3 w-full bg-pink-100 border-2 border-pink-400 p-[1.5px] rounded-sm">
         <div
           className={`h-full ${colorClass} transition-all duration-500 ease-out`}
           style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
@@ -205,7 +248,7 @@ export default function NanakoPetController() {
 
                 <button
                   type="submit"
-                  className={`mt-4 w-full bg-pink-400 text-white font-black py-4 border-b-4 border-r-4 border-pink-600 rounded-xl text-lg ${PRESS_DOWN_CLASS}`}
+                  className={`mt-4 w-full bg-pink-400 text-white font-black py-3 border-b-4 border-r-4 border-pink-600 rounded-xl text-lg ${PRESS_DOWN_CLASS}`}
                 >
                   CONNECT {'>'}
                 </button>
@@ -218,25 +261,35 @@ export default function NanakoPetController() {
             <div className="flex-1 flex flex-col h-full animate-fade-in relative z-10">
 
               {/* --- 屏幕区 (复古像素屏滤镜) --- */}
-              <div className="bg-[#b4cca1] border-4 border-slate-700 rounded-lg p-3 shadow-inner relative overflow-hidden mb-6 h-40 flex flex-col justify-between">
+              <div className="bg-[#b4cca1] border-4 border-slate-700 rounded-lg p-2 shadow-inner relative overflow-hidden mb-3 h-32 flex flex-col justify-between">
                 {/* 扫描线效果 */}
                 <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-[length:100%_4px] pointer-events-none" />
 
-                {/* 字符表情区 */}
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="text-slate-800 text-3xl font-black animate-bounce pb-4">
-                    {stats.mood > 80 ? "(≧▽≦)" : stats.mood > 40 ? "(・∀・)" : "(T_T)"}
-                  </div>
+                {/* 对话气泡历史区 (取代了原来的大表情) */}
+                <div className="flex-1 overflow-y-auto w-full text-[10px] font-bold text-slate-800 space-y-1 pr-1" style={{ scrollbarWidth: 'none' }}>
+                  {messages.length === 0 ? (
+                    <div className="h-full flex items-center justify-center opacity-50">
+                      (≧▽≦) 等待通讯...
+                    </div>
+                  ) : (
+                    messages.map((m) => (
+                      <div key={m.id} className={m.sender === 'user' ? 'text-right' : 'text-left'}>
+                        <span className={m.sender === 'user' ? 'bg-slate-700 text-white px-2 py-0.5 rounded-l-lg rounded-tr-lg inline-block' : 'bg-white px-2 py-0.5 rounded-r-lg rounded-tl-lg inline-block border-2 border-slate-700'}>
+                          {m.text}
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
 
                 {/* 屏幕内的小终端输出 */}
-                <div className="text-[10px] text-slate-700 font-bold border-t-2 border-slate-600/30 pt-1 h-8 overflow-hidden">
+                <div className="text-[9px] text-slate-700 font-bold border-t-2 border-slate-600/30 pt-1 mt-1 h-6 overflow-hidden">
                   {logs.map((log, i) => <div key={i}>{log}</div>)}
                 </div>
               </div>
 
               {/* --- 状态看板区 (Progress Bars) --- */}
-              <div className="bg-white border-4 border-pink-300 p-4 rounded-2xl mb-6 relative">
+              <div className="bg-white border-4 border-pink-300 p-3 rounded-2xl mb-3 relative">
                 <button
                   onClick={disconnect}
                   className="absolute -top-3 -right-3 bg-red-400 text-white text-[10px] font-bold px-2 py-1 rounded border-2 border-red-600 active:translate-y-px"
@@ -250,24 +303,34 @@ export default function NanakoPetController() {
               </div>
 
               {/* --- 交互按钮九宫格 --- */}
-              <div className="grid grid-cols-2 gap-4 mt-auto">
-                <button onClick={() => sendAction('nod')} className={`bg-cyan-50 border-4 border-cyan-300 text-cyan-700 py-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 ${PRESS_DOWN_CLASS}`}>
-                  <span className="text-2xl">🙇‍♀️</span>
-                  <span className="text-xs">点头</span>
+              <div className="grid grid-cols-3 gap-2 mt-auto">
+                <button onClick={() => sendAction('nod', 0, 'Head')} className={`bg-cyan-50 border-4 border-cyan-300 text-cyan-700 py-2 rounded-xl font-bold flex flex-col items-center justify-center gap-1 ${PRESS_DOWN_CLASS}`}>
+                  <span className="text-xl">🙇‍♀️</span>
+                  <span className="text-[10px]">点头</span>
                 </button>
-                <button onClick={() => sendAction('wave')} className={`bg-purple-50 border-4 border-purple-300 text-purple-700 py-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 ${PRESS_DOWN_CLASS}`}>
-                  <span className="text-2xl">👋</span>
-                  <span className="text-xs">挥手</span>
+                <button onClick={() => sendAction('wave', 1, 'Body')} className={`bg-purple-50 border-4 border-purple-300 text-purple-700 py-2 rounded-xl font-bold flex flex-col items-center justify-center gap-1 ${PRESS_DOWN_CLASS}`}>
+                  <span className="text-xl">👋</span>
+                  <span className="text-[10px]">挥手</span>
                 </button>
-                <button onClick={() => sendAction('feed')} className={`bg-amber-50 border-4 border-amber-300 text-amber-700 py-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 ${PRESS_DOWN_CLASS}`}>
-                  <span className="text-2xl">🍰</span>
-                  <span className="text-xs">喂食</span>
-                </button>
-                <button onClick={() => sendAction('chat')} className={`bg-rose-50 border-4 border-rose-300 text-rose-700 py-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 ${PRESS_DOWN_CLASS}`}>
-                  <span className="text-2xl">💬</span>
-                  <span className="text-xs">聊天</span>
+                <button onClick={() => sendAction('feed', 0, 'Body')} className={`bg-amber-50 border-4 border-amber-300 text-amber-700 py-2 rounded-xl font-bold flex flex-col items-center justify-center gap-1 ${PRESS_DOWN_CLASS}`}>
+                  <span className="text-xl">🍰</span>
+                  <span className="text-[10px]">喂食</span>
                 </button>
               </div>
+
+              {/* --- 聊天输入框 --- */}
+              <form onSubmit={sendChat} className="mt-3 flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  placeholder="说点什么..."
+                  className="flex-1 px-3 py-2 border-4 border-pink-300 rounded-xl text-sm outline-none text-pink-900 font-bold bg-white"
+                />
+                <button type="submit" className={`bg-rose-400 text-white border-b-4 border-r-4 border-rose-600 px-4 rounded-xl font-black ${PRESS_DOWN_CLASS}`}>
+                  发送
+                </button>
+              </form>
 
             </div>
           )}
