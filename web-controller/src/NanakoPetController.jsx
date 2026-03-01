@@ -69,15 +69,16 @@ export default function NanakoPetController() {
         try {
           const data = JSON.parse(event.data);
 
-          if (data.type === 'SYNC_STATS' && data.payload) {
-            setStats(prev => ({ ...prev, ...data.payload }));
+          if (data.type === 'status_sync' && data.data) {
+            setStats(prev => ({ ...prev, ...data.data }));
+            addLog("[SYS] 状态值已同步归档");
           }
           else if (data.type === 'text') {
             // 接收回复气泡
             addMessage('nanako', data.text);
           }
           else if (data.type === 'status') {
-            // 状态同步
+            // 状态同步 (简单日志)
             addLog(`[STATUS] ${data.message}`);
           }
           else {
@@ -167,8 +168,19 @@ export default function NanakoPetController() {
   };
 
   // ==========================================
-  // UI 组件抽象
+  // UI 组件抽象 & 映射配置
   // ==========================================
+
+  // 属性栏 UI 映射表：支持服务端发来新的字段自动适配
+  const STATS_UI_MAP = {
+    hunger: { label: '饱食度', icon: '🍙', colorClass: 'bg-amber-400' },
+    affection: { label: '好感度', icon: '💖', colorClass: 'bg-rose-400' },
+    mood: { label: '心情值', icon: '✨', colorClass: 'bg-sky-400' },
+    energy: { label: '精力值', icon: '⚡', colorClass: 'bg-yellow-400' },
+    clean: { label: '清洁度', icon: '🛁', colorClass: 'bg-blue-300' },
+  };
+
+  const getStatUI = (key) => STATS_UI_MAP[key] || { label: key, icon: '📊', colorClass: 'bg-pink-400' };
 
   // 像素风进度条组件
   const PixelProgressBar = ({ label, value, colorClass, icon }) => (
@@ -289,17 +301,26 @@ export default function NanakoPetController() {
               </div>
 
               {/* --- 状态看板区 (Progress Bars) --- */}
-              <div className="bg-white border-4 border-pink-300 p-3 rounded-2xl mb-3 relative">
+              <div className="bg-white border-4 border-pink-300 p-3 rounded-2xl mb-3 relative h-36 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
                 <button
                   onClick={disconnect}
-                  className="absolute -top-3 -right-3 bg-red-400 text-white text-[10px] font-bold px-2 py-1 rounded border-2 border-red-600 active:translate-y-px"
+                  className="absolute top-1 right-2 bg-red-400 text-white text-[10px] font-bold px-2 py-1 rounded border-2 border-red-600 active:translate-y-px z-10"
                 >
                   断开
                 </button>
 
-                <PixelProgressBar label="饱食度" value={stats.hunger} icon="🍙" colorClass="bg-amber-400" />
-                <PixelProgressBar label="好感度" value={stats.affection} icon="💖" colorClass="bg-rose-400" />
-                <PixelProgressBar label="心情值" value={stats.mood} icon="✨" colorClass="bg-sky-400" />
+                {Object.entries(stats).map(([k, v]) => {
+                  const ui = getStatUI(k);
+                  return (
+                    <PixelProgressBar
+                      key={k}
+                      label={ui.label}
+                      value={v}
+                      icon={ui.icon}
+                      colorClass={ui.colorClass}
+                    />
+                  );
+                })}
               </div>
 
               {/* --- 交互按钮九宫格 --- */}
