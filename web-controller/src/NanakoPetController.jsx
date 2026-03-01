@@ -15,11 +15,14 @@ export default function NanakoPetController() {
   const [wsConfig, setWsConfig] = useState({ url: '', token: '' });
   const [status, setStatus] = useState({ isConnected: false, error: null });
 
-  // 宠物属性状态
+  // 宠物属性状态扩充（涵盖生理与情绪，外加态度）
   const [stats, setStats] = useState({
-    hunger: 70,    // 饱食度
-    affection: 50, // 好感度
-    mood: 85,      // 心情值
+    // 生理
+    hunger: 70, thirst: 60, stamina: 80, blood_sugar: 90, energy: 85, stress: 20, dopamine: 60,
+    // 情绪
+    calm: 50, happy: 60, excited: 30, down: 10, tense: 5, irritable: 5, sad: 0, angry: 0,
+    // 态度
+    attitude: '亲近'
   });
 
   // 聊天对话记录 (至多10条)
@@ -171,25 +174,42 @@ export default function NanakoPetController() {
   // UI 组件抽象 & 映射配置
   // ==========================================
 
+  // 生理与情绪的分组键值
+  const PHYSIOLOGY_KEYS = ['hunger', 'thirst', 'stamina', 'blood_sugar', 'energy', 'stress', 'dopamine'];
+  const EMOTION_KEYS = ['calm', 'happy', 'excited', 'down', 'tense', 'irritable', 'sad', 'angry'];
+
   // 属性栏 UI 映射表：支持服务端发来新的字段自动适配
   const STATS_UI_MAP = {
-    hunger: { label: '饱食度', icon: '🍙', colorClass: 'bg-amber-400' },
-    affection: { label: '好感度', icon: '💖', colorClass: 'bg-rose-400' },
-    mood: { label: '心情值', icon: '✨', colorClass: 'bg-sky-400' },
-    energy: { label: '精力值', icon: '⚡', colorClass: 'bg-yellow-400' },
-    clean: { label: '清洁度', icon: '🛁', colorClass: 'bg-blue-300' },
+    // 生理
+    hunger: { label: '饥饿值', icon: '🍙', colorClass: 'bg-amber-400' },
+    thirst: { label: '口渴值', icon: '💧', colorClass: 'bg-blue-400' },
+    stamina: { label: '体力', icon: '💪', colorClass: 'bg-orange-500' },
+    blood_sugar: { label: '血糖', icon: '🍬', colorClass: 'bg-pink-300' },
+    energy: { label: '精力', icon: '⚡', colorClass: 'bg-yellow-400' },
+    stress: { label: '压力', icon: '💢', colorClass: 'bg-purple-600' },
+    dopamine: { label: '多巴胺', icon: '🎵', colorClass: 'bg-rose-400' },
+
+    // 情绪
+    calm: { label: '平静', icon: '😌', colorClass: 'bg-slate-400' },
+    happy: { label: '开心', icon: '😄', colorClass: 'bg-emerald-400' },
+    excited: { label: '兴奋', icon: '🤩', colorClass: 'bg-yellow-500' },
+    down: { label: '低落', icon: '😔', colorClass: 'bg-blue-300' },
+    tense: { label: '紧张', icon: '😰', colorClass: 'bg-indigo-400' },
+    irritable: { label: '烦躁', icon: '😫', colorClass: 'bg-orange-600' },
+    sad: { label: '心酸', icon: '🥺', colorClass: 'bg-teal-600' },
+    angry: { label: '生气', icon: '😡', colorClass: 'bg-red-500' },
   };
 
   const getStatUI = (key) => STATS_UI_MAP[key] || { label: key, icon: '📊', colorClass: 'bg-pink-400' };
 
-  // 像素风进度条组件
+  // 像素风紧凑型进度条组件
   const PixelProgressBar = ({ label, value, colorClass, icon }) => (
-    <div className="mb-2">
-      <div className="flex justify-between text-[10px] font-bold text-pink-900 mb-[2px]">
+    <div className="mb-1">
+      <div className="flex justify-between text-[9px] font-bold text-slate-800 mb-[1px]">
         <span>{icon} {label}</span>
-        <span>{value}/100</span>
+        <span>{value}</span>
       </div>
-      <div className="h-3 w-full bg-pink-100 border-2 border-pink-400 p-[1.5px] rounded-sm">
+      <div className="h-2 w-full bg-white border border-slate-300 p-[1px] rounded-sm">
         <div
           className={`h-full ${colorClass} transition-all duration-500 ease-out`}
           style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
@@ -200,11 +220,11 @@ export default function NanakoPetController() {
 
   return (
     // 外层容器：深色背景，使掌机居中
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-mono select-none">
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-2 font-mono select-none">
 
-      {/* 🕹️ 移动端垂直比例掌机外壳 */}
+      {/* 🕹️ 移动端垂直比例掌机外壳：去固定比例，采用响应式高适应手机 */}
       <div
-        className="w-full max-w-[360px] aspect-[9/18] bg-pink-50 rounded-[40px] border-8 border-pink-300 relative flex flex-col overflow-hidden shadow-2xl"
+        className="w-full max-w-[400px] h-[92vh] max-h-[900px] min-h-[660px] bg-pink-50 rounded-[40px] border-8 border-pink-300 relative flex flex-col overflow-hidden shadow-2xl"
         style={{ boxShadow: "10px 10px 0px 0px rgba(244,114,182,0.5), inset 0 0 20px rgba(255,192,203,0.5)" }}
       >
 
@@ -272,8 +292,8 @@ export default function NanakoPetController() {
             ========================================== */
             <div className="flex-1 flex flex-col h-full animate-fade-in relative z-10">
 
-              {/* --- 屏幕区 (复古像素屏滤镜) --- */}
-              <div className="bg-[#b4cca1] border-4 border-slate-700 rounded-lg p-2 shadow-inner relative overflow-hidden mb-3 h-32 flex flex-col justify-between">
+              {/* --- 屏幕区 (复古像素屏滤镜) 稍微变小 --- */}
+              <div className="bg-[#b4cca1] border-4 border-slate-700 rounded-lg p-2 shadow-inner relative overflow-hidden mb-2 h-24 shrink-0 flex flex-col justify-between">
                 {/* 扫描线效果 */}
                 <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-[length:100%_4px] pointer-events-none" />
 
@@ -300,27 +320,54 @@ export default function NanakoPetController() {
                 </div>
               </div>
 
-              {/* --- 状态看板区 (Progress Bars) --- */}
-              <div className="bg-white border-4 border-pink-300 p-3 rounded-2xl mb-3 relative h-36 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+              {/* --- 状态看板区 (Expanded Progress Bars & Categories) --- */}
+              <div className="bg-white border-4 border-pink-300 p-2 rounded-2xl mb-2 relative flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
                 <button
                   onClick={disconnect}
-                  className="absolute top-1 right-2 bg-red-400 text-white text-[10px] font-bold px-2 py-1 rounded border-2 border-red-600 active:translate-y-px z-10"
+                  className="absolute top-1 right-1 bg-red-400 text-white text-[9px] font-bold px-2 py-1 rounded border-2 border-red-600 active:translate-y-px z-10"
                 >
                   断开
                 </button>
 
-                {Object.entries(stats).map(([k, v]) => {
-                  const ui = getStatUI(k);
-                  return (
-                    <PixelProgressBar
-                      key={k}
-                      label={ui.label}
-                      value={v}
-                      icon={ui.icon}
-                      colorClass={ui.colorClass}
-                    />
-                  );
-                })}
+                {/* --- 态度 (Attitude) --- */}
+                <div className="flex items-center gap-2 mb-2 bg-pink-50 p-2 rounded-lg border-2 border-pink-200">
+                  <span className="text-xl">
+                    {stats.attitude === '生气' || stats.attitude === '烦躁' ? '💢' :
+                      stats.attitude === '亲近' || stats.attitude === '撒娇' ? '💕' :
+                        stats.attitude === '小心' ? '👀' : '💭'}
+                  </span>
+                  <div>
+                    <div className="text-[9px] text-pink-400 font-bold leading-tight">当前态度 (ATTITUDE)</div>
+                    <div className="text-sm text-pink-600 font-black tracking-widest leading-tight">{stats.attitude || '未知'}</div>
+                  </div>
+                </div>
+
+                {/* --- 生理状态 --- */}
+                <div className="mb-2">
+                  <div className="text-[10px] bg-pink-300 text-white inline-block px-2 py-0.5 rounded-t-lg font-bold mb-0.5 shadow-sm">
+                    ✚ 生理指标
+                  </div>
+                  <div className="bg-pink-50/50 p-2 border-2 border-pink-200 rounded-b-lg rounded-tr-lg grid grid-cols-2 gap-x-3 gap-y-1">
+                    {PHYSIOLOGY_KEYS.map(k => {
+                      const ui = getStatUI(k);
+                      // 如果服务端的字段未匹配上也可以做个过滤展示，这里固定展示预设的键
+                      return <PixelProgressBar key={k} label={ui.label} value={stats[k] ?? 0} icon={ui.icon} colorClass={ui.colorClass} />;
+                    })}
+                  </div>
+                </div>
+
+                {/* --- 情绪监控 --- */}
+                <div className="mb-2">
+                  <div className="text-[10px] bg-indigo-300 text-white inline-block px-2 py-0.5 rounded-t-lg font-bold mb-0.5 shadow-sm">
+                    ❤ 情绪维度
+                  </div>
+                  <div className="bg-indigo-50/50 p-2 border-2 border-indigo-200 rounded-b-lg rounded-tr-lg grid grid-cols-2 gap-x-3 gap-y-1">
+                    {EMOTION_KEYS.map(k => {
+                      const ui = getStatUI(k);
+                      return <PixelProgressBar key={k} label={ui.label} value={stats[k] ?? 0} icon={ui.icon} colorClass={ui.colorClass} />;
+                    })}
+                  </div>
+                </div>
               </div>
 
               {/* --- 交互按钮九宫格 --- */}
