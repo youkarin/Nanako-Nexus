@@ -1,29 +1,43 @@
 import React, { useState } from 'react';
 
 // === 世界配置 ===
-const GRID_SIZE = 12; // 定义一个 12x12 的网格世界
+const GRID_SIZE = 24; // 定义一个 24x24 的更密集网格世界
 
 // === 数据层：实体定义 ===
 // x,y 表示起始坐标(1开始)，w,h 表示占地宽高(所占格子数)
 const mapEntities = [
-    // --- 🏠 家 (Home Zone) ---
-    { id: 'bedroom', name: '卧室', type: 'home', icon: '🛏️', x: 2, y: 2, w: 2, h: 2, style: 'bg-indigo-500/20 border-indigo-400/50 text-indigo-300 shadow-indigo-500/20' },
-    { id: 'living', name: '客厅', type: 'home', icon: '🛋️', x: 4, y: 2, w: 3, h: 2, style: 'bg-sky-500/20 border-sky-400/50 text-sky-300 shadow-sky-500/20' },
-    { id: 'kitchen', name: '厨房', type: 'home', icon: '🍳', x: 2, y: 4, w: 2, h: 2, style: 'bg-orange-500/20 border-orange-400/50 text-orange-300 shadow-orange-500/20' },
-    { id: 'dining', name: '餐厅', type: 'home', icon: '🍽️', x: 4, y: 4, w: 3, h: 2, style: 'bg-rose-500/20 border-rose-400/50 text-rose-300 shadow-rose-500/20' },
+    // --- 🏠 家的房间边界 (只做背景衬托) ---
+    { id: 'bedroom', name: '卧室', type: 'room', icon: '', x: 2, y: 2, w: 8, h: 8, style: 'bg-indigo-900/40 border-indigo-500/30 text-indigo-300' },
+    { id: 'living', name: '客厅', type: 'room', icon: '', x: 10, y: 2, w: 12, h: 8, style: 'bg-sky-900/40 border-sky-500/30 text-sky-300' },
+    { id: 'kitchen', name: '厨房', type: 'room', icon: '', x: 2, y: 10, w: 8, h: 6, style: 'bg-orange-900/40 border-orange-500/30 text-orange-300' },
+    { id: 'dining', name: '餐厅', type: 'room', icon: '', x: 10, y: 10, w: 12, h: 6, style: 'bg-rose-900/40 border-rose-500/30 text-rose-300' },
 
-    // --- 🏙️ 街道与公共设施 (City Zone) ---
-    { id: 'mall', name: '商场', type: 'city', icon: '🛍️', x: 8, y: 2, w: 4, h: 4, style: 'bg-purple-500/20 border-purple-400/50 text-purple-300 shadow-purple-500/20' },
-    { id: 'park', name: '公园', type: 'city', icon: '🌳', x: 2, y: 8, w: 4, h: 4, style: 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300 shadow-emerald-500/20' },
-    { id: 'gym', name: '健身房', type: 'city', icon: '💪', x: 7, y: 8, w: 2, h: 3, style: 'bg-amber-500/20 border-amber-400/50 text-amber-300 shadow-amber-500/20' },
-    { id: 'arcade', name: '游戏厅', type: 'city', icon: '🎮', x: 10, y: 8, w: 2, h: 3, style: 'bg-cyan-500/20 border-cyan-400/50 text-cyan-300 shadow-cyan-500/20' },
+    // --- 🛋️ 室内家具 (Placed inside the rooms) ---
+    // 卧室内部
+    { id: 'bed', name: '大床', type: 'furniture', icon: '🛏️', x: 3, y: 3, w: 3, h: 4, style: 'bg-indigo-400/80 border-indigo-300 text-white shadow-lg' },
+    { id: 'wardrobe', name: '衣柜', type: 'furniture', icon: '🚪', x: 7, y: 3, w: 2, h: 2, style: 'bg-indigo-600/80 border-indigo-400 text-white shadow-lg' },
+
+    // 客厅内部
+    { id: 'tv', name: '电视机', type: 'furniture', icon: '📺', x: 15, y: 3, w: 3, h: 1, style: 'bg-sky-700/80 border-sky-400 text-white shadow-lg' },
+    { id: 'sofa', name: '大沙发', type: 'furniture', icon: '🛋️', x: 14, y: 6, w: 5, h: 2, style: 'bg-sky-500/80 border-sky-300 text-white shadow-lg' },
+    { id: 'plant', name: '绿植', type: 'furniture', icon: '🪴', x: 11, y: 3, w: 2, h: 2, style: 'bg-emerald-600/80 border-emerald-400 text-white shadow-lg' },
+
+    // 厨房与餐厅内部
+    { id: 'stove', name: '炉灶', type: 'furniture', icon: '🍳', x: 3, y: 11, w: 3, h: 2, style: 'bg-orange-600/80 border-orange-400 text-white shadow-lg' },
+    { id: 'fridge', name: '冰箱', type: 'furniture', icon: '🧊', x: 7, y: 11, w: 2, h: 2, style: 'bg-slate-400/80 border-slate-300 text-white shadow-lg' },
+    { id: 'dtable', name: '餐桌', type: 'furniture', icon: '🍽️', x: 13, y: 12, w: 4, h: 3, style: 'bg-rose-500/80 border-rose-300 text-white shadow-lg' },
+
+    // --- 🏙️ 街道与公共设施 (City Zone) 扩大坐标适应 24x24 ---
+    { id: 'mall', name: '商场', type: 'city', icon: '🛍️', x: 14, y: 18, w: 8, h: 5, style: 'bg-purple-500/20 border-purple-400/50 text-purple-300 shadow-purple-500/20' },
+    { id: 'park', name: '公园', type: 'city', icon: '🌳', x: 2, y: 18, w: 6, h: 5, style: 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300 shadow-emerald-500/20' },
+    { id: 'gym', name: '健身房', type: 'city', icon: '💪', x: 9, y: 18, w: 4, h: 5, style: 'bg-amber-500/20 border-amber-400/50 text-amber-300 shadow-amber-500/20' },
 ];
 
 export default function GridWorldSimulator() {
     const [hoveredEntity, setHoveredEntity] = useState(null);
 
     return (
-        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-8 font-sans">
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 pt-24 font-sans">
             {/* ===== 面板主容器 ===== */}
             <div className="w-full max-w-5xl bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 overflow-hidden flex flex-col">
 
@@ -49,9 +63,9 @@ export default function GridWorldSimulator() {
                 </div>
 
                 {/* ===== 核心网格视图 ===== */}
-                <div className="p-10 flex justify-center bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800 to-slate-950">
+                <div className="p-6 md:p-10 flex justify-center bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800 to-slate-950">
                     <div
-                        className="relative w-full aspect-square max-w-2xl bg-slate-950/50 border border-slate-700/50 shadow-2xl rounded-2xl overflow-hidden"
+                        className="relative w-full aspect-square max-w-4xl bg-slate-950/50 border border-slate-700/50 shadow-2xl rounded-sm overflow-hidden"
                         style={{
                             display: 'grid',
                             gridTemplateColumns: `repeat(${GRID_SIZE}, 1fr)`,
@@ -91,16 +105,18 @@ export default function GridWorldSimulator() {
                                 style={{
                                     gridColumn: `${entity.x} / span ${entity.w}`,
                                     gridRow: `${entity.y} / span ${entity.h}`,
-                                    margin: '6px' // 给网格内的建筑增加一定的内间距
+                                    margin: entity.type === 'room' ? '1px' : '4px' // 房间的内距小一点，家具内距大一点有缝隙
                                 }}
                             >
-                                <span className="text-3xl mb-1.5 drop-shadow-lg">{entity.icon}</span>
-                                <span className="font-bold tracking-widest text-[15px]">{entity.name}</span>
+                                <span className={`${entity.type === 'furniture' ? 'text-xl' : 'text-2xl'} mb-1 drop-shadow-lg`}>{entity.icon}</span>
+                                <span className={`font-bold tracking-widest ${entity.type === 'furniture' ? 'text-[9px]' : 'text-sm'}`}>{entity.name}</span>
 
                                 {/* 装饰性占地面积提示 */}
-                                <div className="absolute top-2 left-2 text-[10px] font-mono opacity-50">
-                                    {entity.w}x{entity.h}
-                                </div>
+                                {entity.type !== 'room' && (
+                                    <div className="absolute top-1 left-1 text-[8px] font-mono opacity-40">
+                                        {entity.w}x{entity.h}
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
