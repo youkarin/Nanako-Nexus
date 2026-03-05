@@ -152,3 +152,67 @@ export function findLocation(name, pois = null) {
 }
 
 export const POIS = DEFAULT_POIS;
+
+// ── 自定义家具持久化 ──────────────────────────────────────────
+export const CUSTOM_FURN_KEY = 'nanako_custom_furn_v2';
+const FURN_INIT_KEY = 'nanako_furn_initialized_v1';
+
+export function loadCustomFurn() {
+    try {
+        const raw = localStorage.getItem(CUSTOM_FURN_KEY);
+        if (raw) {
+            const f = JSON.parse(raw);
+            if (Array.isArray(f)) return f;
+        }
+    } catch { }
+    return [];
+}
+
+export function saveCustomFurn(furn) {
+    localStorage.setItem(CUSTOM_FURN_KEY, JSON.stringify(furn));
+}
+
+/**
+ * 迁移内置家具到 customFurn（仅首次运行）。
+ * builtInItems 是 getBuiltInFurniture() 返回的 [{t,c,r}, ...]
+ * 返回合并后的家具列表。
+ */
+export function migrateFurniture(builtInItems) {
+    if (localStorage.getItem(FURN_INIT_KEY)) {
+        // 已经迁移过了，直接返回当前数据
+        return loadCustomFurn();
+    }
+    // 首次迁移：合并内置 + 已有自定义
+    const existing = loadCustomFurn();
+    // 避免重复：用坐标做 key
+    const occupied = new Set(existing.map(f => `${f.c},${f.r}`));
+    const merged = [...existing];
+    builtInItems.forEach(f => {
+        const key = `${f.c},${f.r}`;
+        if (!occupied.has(key)) {
+            merged.push(f);
+            occupied.add(key);
+        }
+    });
+    saveCustomFurn(merged);
+    localStorage.setItem(FURN_INIT_KEY, '1');
+    return merged;
+}
+
+// ── 自定义地板持久化 ──────────────────────────────────────────
+export const CUSTOM_FLOOR_KEY = 'nanako_custom_floors_v2';
+
+export function loadCustomFloors() {
+    try {
+        const raw = localStorage.getItem(CUSTOM_FLOOR_KEY);
+        if (raw) {
+            const f = JSON.parse(raw);
+            if (Array.isArray(f)) return f;
+        }
+    } catch { }
+    return [];
+}
+
+export function saveCustomFloors(floors) {
+    localStorage.setItem(CUSTOM_FLOOR_KEY, JSON.stringify(floors));
+}
