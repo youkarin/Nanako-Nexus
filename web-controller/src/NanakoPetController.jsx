@@ -46,11 +46,40 @@ export default function NanakoPetController() {
   const wsRef = useRef(null);
   const chatEndRef = useRef(null);
 
+  // Listen for map navigation feedback + position query replies
+  useEffect(() => {
+    const onArrived = e => addLog(`[MAP] ✅ 已到达 ${e.detail?.label || JSON.stringify(e.detail?.pos)}`);
+    const onBlocked = e => addLog(`[MAP] ❌ 路径受阻: ${e.detail?.reason}`);
+    const onPosition = e => {
+      const d = e.detail;
+      addLog(`[MAP] 📍 坐标 [${d.col},${d.row}] 最近地点: ${d.location_label || '未知'}`);
+      // Relay position back to AI server via WebSocket
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'position',
+          col: d.col,
+          row: d.row,
+          location: d.location,
+          location_label: d.location_label,
+          distance_to_location: d.distance_to_location,
+        }));
+      }
+    };
+    window.addEventListener('nanako:arrived', onArrived);
+    window.addEventListener('nanako:blocked', onBlocked);
+    window.addEventListener('nanako:position', onPosition);
+    return () => {
+      window.removeEventListener('nanako:arrived', onArrived);
+      window.removeEventListener('nanako:blocked', onBlocked);
+      window.removeEventListener('nanako:position', onPosition);
+    };
+  }, []);
+
   // 初始化时尝试从 localStorage 读取历史配置
   useEffect(() => {
     const savedConfig = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (savedConfig) {
-      try { setWsConfig(JSON.parse(savedConfig)); } catch {}
+      try { setWsConfig(JSON.parse(savedConfig)); } catch { }
     }
   }, []);
 
@@ -100,6 +129,16 @@ export default function NanakoPetController() {
           }
           else if (msg.type === 'status') {
             addLog(`[STATUS] ${msg.message}`);
+          }
+          else if (msg.type === 'move_to') {
+            // Forward to GridWorldSimulator via window event bus
+            window.dispatchEvent(new CustomEvent('nanako:move_to', { detail: msg }));
+            addLog(`[MAP] 导航 → ${msg.location || JSON.stringify(msg.target)}`);
+          }
+          else if (msg.type === 'query_pos') {
+            // Ask map for current position → will reply via nanako:position event
+            window.dispatchEvent(new CustomEvent('nanako:query_pos'));
+            addLog('[MAP] 查询坐标...');
           }
           else {
             addLog(`[RECV] ${msg.type}`);
@@ -186,24 +225,24 @@ export default function NanakoPetController() {
   // UI 配置映射
   // ==========================================
   const PHYSIOLOGY_KEYS = ['hunger', 'thirst', 'energy', 'stamina', 'blood_sugar', 'dopamine', 'stress'];
-  const EMOTION_KEYS    = ['happiness', 'calm', 'excited', 'low', 'nervous', 'irritated', 'sour', 'angry'];
+  const EMOTION_KEYS = ['happiness', 'calm', 'excited', 'low', 'nervous', 'irritated', 'sour', 'angry'];
 
   const STATS_UI_MAP = {
-    hunger:    { label: '饥饿值', icon: '🍙', colorClass: 'bg-amber-400',   max: 100 },
-    thirst:    { label: '口渴值', icon: '💧', colorClass: 'bg-blue-400',    max: 100 },
-    energy:    { label: '精力',   icon: '⚡', colorClass: 'bg-yellow-400',  max: 100 },
-    stamina:   { label: '体力',   icon: '💪', colorClass: 'bg-orange-500',  max: 100 },
-    blood_sugar:{ label: '血糖',  icon: '🍬', colorClass: 'bg-pink-300',    max: 100 },
-    dopamine:  { label: '多巴胺', icon: '🎵', colorClass: 'bg-rose-400',    max: 100 },
-    stress:    { label: '压力',   icon: '💢', colorClass: 'bg-purple-600',  max: 100 },
-    happiness: { label: '开心',   icon: '😄', colorClass: 'bg-emerald-400', max: 10  },
-    calm:      { label: '平静',   icon: '😌', colorClass: 'bg-slate-400',   max: 10  },
-    excited:   { label: '兴奋',   icon: '🤩', colorClass: 'bg-yellow-500',  max: 10  },
-    low:       { label: '低落',   icon: '😔', colorClass: 'bg-blue-300',    max: 10  },
-    nervous:   { label: '紧张',   icon: '😰', colorClass: 'bg-indigo-400',  max: 10  },
-    irritated: { label: '烦躁',   icon: '😫', colorClass: 'bg-orange-600',  max: 10  },
-    sour:      { label: '心酸',   icon: '🥺', colorClass: 'bg-teal-600',    max: 10  },
-    angry:     { label: '生气',   icon: '😡', colorClass: 'bg-red-500',     max: 10  },
+    hunger: { label: '饥饿值', icon: '🍙', colorClass: 'bg-amber-400', max: 100 },
+    thirst: { label: '口渴值', icon: '💧', colorClass: 'bg-blue-400', max: 100 },
+    energy: { label: '精力', icon: '⚡', colorClass: 'bg-yellow-400', max: 100 },
+    stamina: { label: '体力', icon: '💪', colorClass: 'bg-orange-500', max: 100 },
+    blood_sugar: { label: '血糖', icon: '🍬', colorClass: 'bg-pink-300', max: 100 },
+    dopamine: { label: '多巴胺', icon: '🎵', colorClass: 'bg-rose-400', max: 100 },
+    stress: { label: '压力', icon: '💢', colorClass: 'bg-purple-600', max: 100 },
+    happiness: { label: '开心', icon: '😄', colorClass: 'bg-emerald-400', max: 10 },
+    calm: { label: '平静', icon: '😌', colorClass: 'bg-slate-400', max: 10 },
+    excited: { label: '兴奋', icon: '🤩', colorClass: 'bg-yellow-500', max: 10 },
+    low: { label: '低落', icon: '😔', colorClass: 'bg-blue-300', max: 10 },
+    nervous: { label: '紧张', icon: '😰', colorClass: 'bg-indigo-400', max: 10 },
+    irritated: { label: '烦躁', icon: '😫', colorClass: 'bg-orange-600', max: 10 },
+    sour: { label: '心酸', icon: '🥺', colorClass: 'bg-teal-600', max: 10 },
+    angry: { label: '生气', icon: '😡', colorClass: 'bg-red-500', max: 10 },
   };
 
   const getStatUI = (key) => STATS_UI_MAP[key] || { label: key, icon: '📊', colorClass: 'bg-pink-400', max: 100 };
@@ -342,17 +381,16 @@ export default function NanakoPetController() {
               <div className="flex gap-1 mb-2 shrink-0">
                 {[
                   { id: 'status', label: '📊 状态' },
-                  { id: 'shop',   label: '🛒 商城' },
-                  { id: 'bag',    label: `🎒 背包${bagHasItems ? '●' : ''}` },
+                  { id: 'shop', label: '🛒 商城' },
+                  { id: 'bag', label: `🎒 背包${bagHasItems ? '●' : ''}` },
                 ].map(t => (
                   <button
                     key={t.id}
                     onClick={() => setTab(t.id)}
-                    className={`flex-1 text-[10px] font-black py-1 rounded-lg border-2 transition-all ${
-                      tab === t.id
-                        ? 'bg-pink-400 text-white border-pink-600'
-                        : 'bg-white text-pink-400 border-pink-200'
-                    }`}
+                    className={`flex-1 text-[10px] font-black py-1 rounded-lg border-2 transition-all ${tab === t.id
+                      ? 'bg-pink-400 text-white border-pink-600'
+                      : 'bg-white text-pink-400 border-pink-200'
+                      }`}
                   >
                     {t.label}
                   </button>
@@ -556,7 +594,8 @@ export default function NanakoPetController() {
         </div>
       </div>
 
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @keyframes fade-in { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       `}} />
