@@ -1,25 +1,20 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { loadPois, POI_KEY, findLocation, loadCustomFurn, CUSTOM_FURN_KEY, loadCustomFloors, CUSTOM_FLOOR_KEY, migrateFurniture } from './mapUtils';
-import { COLS, ROWS, CELL, drawScene, findPath, WALK_GRID, getBuiltInFurniture } from './GridWorldRenderer';
+import { loadPois, POI_KEY, loadCustomFurn, CUSTOM_FURN_KEY, loadCustomFloors, CUSTOM_FLOOR_KEY, migrateFurniture } from './mapUtils';
+import { COLS, ROWS, CELL, drawScene, getBuiltInFurniture } from './GridWorldRenderer';
 
 // ═════════════════════════════════════════════════════════════
-//  COMPONENT
+//  COMPONENT — 云端模式 (纯渲染器)
+//  · 不再做本地寻路/步进
+//  · 角色坐标由云端 MapEngine 推送
+//  · 点击地图 → 发给云端处理
+//  · POI/家具/地板数据也由云端同步
 // ═════════════════════════════════════════════════════════════
 const CHAR_INIT = { col: 7, row: 14 };
-const STEP_MS = 150;
-const CHAR_POS_KEY = 'nanako_char_pos';
-function loadCharPos() {
-    try {
-        const s = localStorage.getItem(CHAR_POS_KEY);
-        if (s) { const p = JSON.parse(s); if (typeof p.col === 'number' && typeof p.row === 'number') return p; }
-    } catch { }
-    return CHAR_INIT;
-}
 
 export default function GridWorldSimulator() {
     const canvasRef = useRef(null), animRef = useRef(null);
     const isDragging = useRef(false), lastMouse = useRef({ x: 0, y: 0 });
-    const charPosRef = useRef(loadCharPos()), stepTimerRef = useRef(null);
+    const charPosRef = useRef(CHAR_INIT);
     const charDirRef = useRef('down');
 
     const [zoom, setZoom] = useState(0.65);
@@ -28,13 +23,14 @@ export default function GridWorldSimulator() {
     const [pois, setPois] = useState(loadPois);
     const [customFurn, setCustomFurn] = useState(() => migrateFurniture(getBuiltInFurniture()));
     const [customFloors, setCustomFloors] = useState(loadCustomFloors);
-    const [charPos, setCharPos] = useState(loadCharPos);
-    const [charPath, setCharPath] = useState([]);
+    const [charPos, setCharPos] = useState(CHAR_INIT);
     const [charStatus, setCharStatus] = useState('idle');
     const [charLabel, setCharLabel] = useState(null);
 
-    useEffect(() => { charPosRef.current = charPos; localStorage.setItem(CHAR_POS_KEY, JSON.stringify(charPos)); }, [charPos]);
+    // ── 同步 ref ──────────────────────────────────────────────
+    useEffect(() => { charPosRef.current = charPos; }, [charPos]);
 
+    // ── 监听 localStorage 变更 (兼容 MapEditor 本地编辑) ─────
     useEffect(() => {
         const onStorage = e => {
             if (e.key === POI_KEY || !e.key) setPois(loadPois());
@@ -45,61 +41,77 @@ export default function GridWorldSimulator() {
         return () => window.removeEventListener('storage', onStorage);
     }, []);
 
-    // Step engine
+    // ═════════════════════════════════════════════════════════
+    //  云端事件监听
+    //  NanakoPetController 收到 WS 消息后，通过 window 事件转发
+    // ═════════════════════════════════════════════════════════
+
+    // 云端推送角色位置 (每步/状态变化时)
     useEffect(() => {
-        if (!charPath.length) return;
-        if (stepTimerRef.current) clearInterval(stepTimerRef.current);
-        stepTimerRef.current = setInterval(() => {
-            setCharPath(prev => {
-                if (!prev.length) { clearInterval(stepTimerRef.current); setCharStatus('idle'); setCharLabel(null); return prev; }
-                const [nc, nr] = prev[0];
-                const { col: oc, row: or } = charPosRef.current;
-                const dc = nc - oc, dr = nr - or;
-                if (Math.abs(dc) > Math.abs(dr)) charDirRef.current = dc > 0 ? 'right' : 'left';
-                else if (dr !== 0) charDirRef.current = dr > 0 ? 'down' : 'up';
-                setCharPos({ col: nc, row: nr }); charPosRef.current = { col: nc, row: nr };
-                const rest = prev.slice(1);
-                if (!rest.length) {
-                    clearInterval(stepTimerRef.current); setCharStatus('idle'); setCharLabel(null);
-                    window.dispatchEvent(new CustomEvent('nanako:arrived', { detail: { pos: [nc, nr] } }));
-                }
-                return rest;
-            });
-        }, STEP_MS);
-        return () => clearInterval(stepTimerRef.current);
-    }, [charPath]);
+        const onCharPosition = (e) => {
+            const d = e.detail;
+            if (typeof d.col === 'number' && typeof d.row === 'number') {
+                setCharPos({ col: d.col, row: d.row });
+                charPosRef.current = { col: d.col, row: d.row };
+            }
+            if (d.dir) charDirRef.current = d.dir;
+            if (d.status) setCharStatus(d.status);
+            if (d.label !== undefined) setCharLabel(d.label);
+        };
+        window.addEventListener('nanako:char_position', onCharPosition);
+        return () => window.removeEventListener('nanako:char_position', onCharPosition);
+    }, []);
 
-    const handleMoveTo = useCallback((detail) => {
-        let ec, er, label;
-        if (detail.location) {
-            const poi = findLocation(detail.location, pois);
-            if (!poi) { window.dispatchEvent(new CustomEvent('nanako:blocked', { detail: { reason: 'unknown_location' } })); return; }
-            ec = poi.col; er = poi.row; label = poi.label;
-        } else if (Array.isArray(detail.target)) {
-            [ec, er] = detail.target; label = `(${ec},${er})`;
-        } else return;
-        const { col: sc, row: sr } = charPosRef.current;
-        const path = findPath(sc, sr, ec, er);
-        if (!path) {
-            setCharStatus('blocked');
-            window.dispatchEvent(new CustomEvent('nanako:blocked', { detail: { reason: 'no_path' } }));
-            setTimeout(() => setCharStatus('idle'), 1500); return;
-        }
-        const steps = path.slice(1); if (!steps.length) return;
-        setCharLabel(label); setCharStatus('moving'); setCharPath(steps);
-        window.dispatchEvent(new CustomEvent('nanako:moving', { detail: { target: [ec, er], label, path_length: steps.length } }));
-    }, [pois]);
-
+    // 云端推送完整地图快照 (连接/重连时)
     useEffect(() => {
-        const h = e => handleMoveTo(e.detail);
-        window.addEventListener('nanako:move_to', h);
-        return () => window.removeEventListener('nanako:move_to', h);
-    }, [handleMoveTo]);
+        const onMapSync = (e) => {
+            const d = e.detail;
+            if (d.charPos) {
+                setCharPos(d.charPos);
+                charPosRef.current = d.charPos;
+            }
+            if (d.charDir) charDirRef.current = d.charDir;
+            if (d.charStatus) setCharStatus(d.charStatus);
+            if (d.charLabel !== undefined) setCharLabel(d.charLabel);
+            if (d.pois) setPois(d.pois);
+            if (d.customFurn) setCustomFurn(d.customFurn);
+            if (d.customFloors) setCustomFloors(d.customFloors);
+        };
+        window.addEventListener('nanako:map_sync', onMapSync);
+        return () => window.removeEventListener('nanako:map_sync', onMapSync);
+    }, []);
 
+    // 云端推送角色到达目的地
+    useEffect(() => {
+        const onArrived = (e) => {
+            const d = e.detail;
+            if (typeof d.col === 'number' && typeof d.row === 'number') {
+                setCharPos({ col: d.col, row: d.row });
+                charPosRef.current = { col: d.col, row: d.row };
+            }
+            setCharStatus('idle');
+            setCharLabel(null);
+        };
+        window.addEventListener('nanako:char_arrived', onArrived);
+        return () => window.removeEventListener('nanako:char_arrived', onArrived);
+    }, []);
+
+    // 兼容旧的 move_to 事件 (本地降级 / MapEditor 测试用)
+    // 现在不做本地寻路，只转发给云端
+    useEffect(() => {
+        const onMoveTo = (e) => {
+            // 转发给 NanakoPetController → 通过 WS 发给云端
+            window.dispatchEvent(new CustomEvent('nanako:request_move', { detail: e.detail }));
+        };
+        window.addEventListener('nanako:move_to', onMoveTo);
+        return () => window.removeEventListener('nanako:move_to', onMoveTo);
+    }, []);
+
+    // 查询位置 — 直接返回当前渲染的位置 (兼容旧接口)
     useEffect(() => {
         const respond = () => {
             const { col, row } = charPosRef.current;
-            const currentPois = loadPois();
+            const currentPois = pois;
             let nearest = null, minDist = Infinity;
             currentPois.forEach(p => {
                 const d = Math.abs(p.col - col) + Math.abs(p.row - row);
@@ -119,8 +131,9 @@ export default function GridWorldSimulator() {
             window.removeEventListener('nanako:query_pos', respond);
             delete window.nanakoGetPos;
         };
-    }, []);
+    }, [pois]);
 
+    // ── 渲染 ────────────────────────────────────────────────
     const draw = useCallback(() => {
         const cv = canvasRef.current; if (!cv) return;
         drawScene(cv.getContext('2d'), cv.width, cv.height, zoom, offset, pois,
@@ -140,6 +153,7 @@ export default function GridWorldSimulator() {
         return () => ro.disconnect();
     }, []);
 
+    // ── 鼠标交互 ────────────────────────────────────────────
     const getRC = e => {
         const cv = canvasRef.current; if (!cv) return null;
         const r = cv.getBoundingClientRect(), cs = CELL * zoom;
@@ -158,14 +172,25 @@ export default function GridWorldSimulator() {
     const onMouseUp = () => isDragging.current = false;
     const onMouseLeave = () => { isDragging.current = false; setHovered(null); };
     const onWheel = e => { e.preventDefault(); setZoom(z => +(Math.max(0.3, Math.min(4, z + (e.deltaY < 0 ? .1 : -.1))).toFixed(2))); };
-    const onClick = e => { if (!isDragging.current) { const rc = getRC(e); if (rc) handleMoveTo({ target: [rc.col, rc.row] }); } };
+
+    // 点击地图 → 发给云端移动 (不再本地寻路)
+    const onClick = e => {
+        if (!isDragging.current) {
+            const rc = getRC(e);
+            if (rc) {
+                window.dispatchEvent(new CustomEvent('nanako:request_move', {
+                    detail: { target: [rc.col, rc.row] }
+                }));
+            }
+        }
+    };
 
     return (
         <div className="min-h-screen bg-slate-950 flex flex-col items-center font-sans pt-20 pb-6 px-4 select-none">
             <div className="w-full max-w-6xl mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-black bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent tracking-wide">🗺️ NANAKO WORLD MAP</h1>
-                    <p className="text-slate-500 text-xs mt-0.5">{COLS}×{ROWS} · 精装修版 · 点击移动</p>
+                    <p className="text-slate-500 text-xs mt-0.5">{COLS}×{ROWS} · 云端同步模式 · 点击移动</p>
                 </div>
                 <div className="flex items-center gap-2">
                     {[['＋', .2], ['－', -.2]].map(([l, d]) => (
@@ -189,7 +214,8 @@ export default function GridWorldSimulator() {
                                 : '点击地图移动菜菜子 · 拖拽平移 · 滚轮缩放'}
                 </span>
                 <span className="ml-auto text-xs font-mono text-slate-500">
-                    菜菜子 [{charPos.col},{charPos.row}]{charPath.length > 0 && <span className="text-emerald-500 ml-1">→{charPath.length}格</span>}
+                    菜菜子 [{charPos.col},{charPos.row}]
+                    {charStatus === 'moving' && <span className="text-emerald-500 ml-1">移动中...</span>}
                 </span>
             </div>
             <div className="w-full max-w-6xl border border-slate-700 rounded-2xl overflow-hidden shadow-2xl shadow-black/60" style={{ height: 620 }}>
@@ -198,7 +224,7 @@ export default function GridWorldSimulator() {
                     onWheel={onWheel} onMouseMove={onMouseMove} onMouseDown={onMouseDown}
                     onMouseUp={onMouseUp} onMouseLeave={onMouseLeave} onClick={onClick} />
             </div>
-            <p className="text-slate-700 text-[10px] mt-3">Pure canvas renderer · 精装修版 · 48×28</p>
+            <p className="text-slate-700 text-[10px] mt-3">Pure canvas renderer · ☁️ 云端同步模式 · 48×28</p>
         </div>
     );
 }

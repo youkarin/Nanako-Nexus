@@ -46,31 +46,41 @@ export default function NanakoPetController() {
   const wsRef = useRef(null);
   const chatEndRef = useRef(null);
 
-  // Listen for map navigation feedback + position query replies
+  // ── 云端模式：监听地图事件 ──────────────────────────────
   useEffect(() => {
-    const onArrived = e => addLog(`[MAP] ✅ 已到达 ${e.detail?.label || JSON.stringify(e.detail?.pos)}`);
-    const onBlocked = e => addLog(`[MAP] ❌ 路径受阻: ${e.detail?.reason}`);
+    // GridWorldSimulator 点击地图时发出 nanako:request_move → 转发给云端
+    const onRequestMove = e => {
+      const d = e.detail;
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        if (d.location) {
+          wsRef.current.send(JSON.stringify({ type: 'move_to', location: d.location }));
+          addLog(`[MAP] 请求移动 → ${d.location}`);
+        } else if (d.target) {
+          wsRef.current.send(JSON.stringify({ type: 'move_to', target: d.target }));
+          addLog(`[MAP] 请求移动 → [${d.target}]`);
+        }
+      } else {
+        addLog('[MAP] ⚠️ 未连接，无法移动');
+      }
+    };
+    // 兼容旧接口：position 回传给 AI
     const onPosition = e => {
       const d = e.detail;
       addLog(`[MAP] 📍 坐标 [${d.col},${d.row}] 最近地点: ${d.location_label || '未知'}`);
-      // Relay position back to AI server via WebSocket
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'position',
-          col: d.col,
-          row: d.row,
+          col: d.col, row: d.row,
           location: d.location,
           location_label: d.location_label,
           distance_to_location: d.distance_to_location,
         }));
       }
     };
-    window.addEventListener('nanako:arrived', onArrived);
-    window.addEventListener('nanako:blocked', onBlocked);
+    window.addEventListener('nanako:request_move', onRequestMove);
     window.addEventListener('nanako:position', onPosition);
     return () => {
-      window.removeEventListener('nanako:arrived', onArrived);
-      window.removeEventListener('nanako:blocked', onBlocked);
+      window.removeEventListener('nanako:request_move', onRequestMove);
       window.removeEventListener('nanako:position', onPosition);
     };
   }, []);
@@ -111,14 +121,11 @@ export default function NanakoPetController() {
           const msg = JSON.parse(event.data);
 
           if (msg.type === 'status_sync' && msg.data) {
-            // 直接合并所有字段（key 与协议完全一致）
             setStats(prev => ({ ...prev, ...msg.data }));
             addLog("[SYS] 状态已同步");
           }
           else if (msg.type === 'shop_sync' && Array.isArray(msg.data)) {
-            // 更新货架
             setShopItems(msg.data);
-            // 同时更新背包库存快照
             const bagSnapshot = {};
             msg.data.forEach(item => { bagSnapshot[item.itemId] = item.quantity; });
             setBagItems(bagSnapshot);
@@ -130,13 +137,35 @@ export default function NanakoPetController() {
           else if (msg.type === 'status') {
             addLog(`[STATUS] ${msg.message}`);
           }
+          // ── 云端地图引擎消息 ─────────────────────────────
+          else if (msg.type === 'char_position') {
+            // 云端 MapEngine 推送的角色坐标 (每步 / 状态变化)
+            window.dispatchEvent(new CustomEvent('nanako:char_position', { detail: msg }));
+          }
+          else if (msg.type === 'char_arrived') {
+            // 云端通知角色已到达
+            window.dispatchEvent(new CustomEvent('nanako:char_arrived', { detail: msg }));
+            addLog(`[MAP] ✅ 到达 ${msg.label || `[${msg.col},${msg.row}]`}`);
+          }
+          else if (msg.type === 'map_sync') {
+            // 云端推送完整地图快照 (首次连接 / 重连)
+            window.dispatchEvent(new CustomEvent('nanako:map_sync', { detail: msg }));
+            addLog('[MAP] ☁️ 地图数据已云端同步');
+          }
+          else if (msg.type === 'move_result') {
+            // 云端移动请求的结果反馈
+            if (msg.success) {
+              addLog(`[MAP] 🚶 ${msg.message} (${msg.path_length} 步)`);
+            } else {
+              addLog(`[MAP] ❌ ${msg.message}`);
+            }
+          }
+          // ── 兼容旧消息 (降级) ────────────────────────────
           else if (msg.type === 'move_to') {
-            // Forward to GridWorldSimulator via window event bus
             window.dispatchEvent(new CustomEvent('nanako:move_to', { detail: msg }));
             addLog(`[MAP] 导航 → ${msg.location || JSON.stringify(msg.target)}`);
           }
           else if (msg.type === 'query_pos') {
-            // Ask map for current position → will reply via nanako:position event
             window.dispatchEvent(new CustomEvent('nanako:query_pos'));
             addLog('[MAP] 查询坐标...');
           }
