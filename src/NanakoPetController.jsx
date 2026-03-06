@@ -164,26 +164,37 @@ export default function NanakoPetController() {
           }
           // ── 云端地图引擎消息 ─────────────────────────────
           else if (msg.type === 'char_position') {
-            // 云端 MapEngine 推送的角色坐标 (每步 / 状态变化)
             window.dispatchEvent(new CustomEvent('nanako:char_position', { detail: msg }));
           }
           else if (msg.type === 'char_arrived') {
-            // 云端通知角色已到达
             window.dispatchEvent(new CustomEvent('nanako:char_arrived', { detail: msg }));
             addLog(`[MAP] ✅ 到达 ${msg.label || `[${msg.col},${msg.row}]`}`);
           }
           else if (msg.type === 'map_sync') {
-            // 云端推送完整地图快照 (首次连接 / 重连)
             window.dispatchEvent(new CustomEvent('nanako:map_sync', { detail: msg }));
             addLog('[MAP] ☁️ 地图数据已云端同步');
           }
           else if (msg.type === 'move_result') {
-            // 云端移动请求的结果反馈
             if (msg.success) {
               addLog(`[MAP] 🚶 ${msg.message} (${msg.path_length} 步)`);
             } else {
               addLog(`[MAP] ❌ ${msg.message}`);
             }
+          }
+          // ── 多人联机消息 ───────────────────────────────────
+          else if (msg.type === 'player_update') {
+            // 其他玩家位置更新
+            window.dispatchEvent(new CustomEvent('nanako:player_update', { detail: msg }));
+          }
+          else if (msg.type === 'player_leave') {
+            // 其他玩家离开
+            window.dispatchEvent(new CustomEvent('nanako:player_leave', { detail: msg }));
+            addLog(`[MP] 👋 ${msg.name || msg.id} 离开了`);
+          }
+          else if (msg.type === 'players_sync') {
+            // 批量玩家同步（连接时）
+            window.dispatchEvent(new CustomEvent('nanako:player_sync', { detail: msg }));
+            addLog(`[MP] 👥 ${msg.players?.length || 0} 位玩家在线`);
           }
           // ── 兼容旧消息 (降级) ────────────────────────────
           else if (msg.type === 'move_to') {
