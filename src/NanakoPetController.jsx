@@ -77,11 +77,36 @@ export default function NanakoPetController() {
         }));
       }
     };
+    // MapEditor 保存数据 → 转发给云端
+    const onSavePois = e => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'save_pois', pois: e.detail }));
+        addLog('[MAP] ☁️ POI 数据已上传云端');
+      }
+    };
+    const onSaveFurn = e => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'save_furn', furn: e.detail }));
+        addLog('[MAP] ☁️ 家具数据已上传云端');
+      }
+    };
+    const onSaveFloors = e => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'save_floors', floors: e.detail }));
+        addLog('[MAP] ☁️ 地板数据已上传云端');
+      }
+    };
     window.addEventListener('nanako:request_move', onRequestMove);
     window.addEventListener('nanako:position', onPosition);
+    window.addEventListener('nanako:save_pois', onSavePois);
+    window.addEventListener('nanako:save_furn', onSaveFurn);
+    window.addEventListener('nanako:save_floors', onSaveFloors);
     return () => {
       window.removeEventListener('nanako:request_move', onRequestMove);
       window.removeEventListener('nanako:position', onPosition);
+      window.removeEventListener('nanako:save_pois', onSavePois);
+      window.removeEventListener('nanako:save_furn', onSaveFurn);
+      window.removeEventListener('nanako:save_floors', onSaveFloors);
     };
   }, []);
 

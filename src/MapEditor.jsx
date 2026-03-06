@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { loadPois, savePois, POI_KEY, loadCustomFurn, saveCustomFurn, CUSTOM_FURN_KEY, loadCustomFloors, saveCustomFloors, CUSTOM_FLOOR_KEY, migrateFurniture } from './mapUtils';
+import { loadPois, POI_KEY, loadCustomFurn, CUSTOM_FURN_KEY, loadCustomFloors, CUSTOM_FLOOR_KEY, migrateFurniture } from './mapUtils';
 import { COLS, ROWS, CELL, drawScene, drawFurniture, drawFloorTile, C, FURN, TREES, WALK_GRID, FLOOR_TYPES, getBuiltInFurniture } from './GridWorldRenderer';
 
 // ============================================================
@@ -52,7 +52,12 @@ const FURNITURE_TYPES = [
 ];
 
 const POI_COLORS = ['#d97706', '#0284c7', '#16a34a', '#7c3aed', '#1d4ed8', '#c2410c', '#854d0e', '#dc2626', '#0f766e', '#be185d'];
-const EMPTY_FORM = { name: '', label: '📍 ', color: '#d97706', aliases: '', actions: [] };
+const EMPTY_FORM = { name: '', label: '📍 ', color: '#d97706', aliases: '', actions: [], col: 0, row: 0 };
+
+// ── 云端保存辅助：通过 window 事件 → NanakoPetController → WS → 云端 ──
+const cloudSavePois = (pois) => window.dispatchEvent(new CustomEvent('nanako:save_pois', { detail: pois }));
+const cloudSaveFurn = (furn) => window.dispatchEvent(new CustomEvent('nanako:save_furn', { detail: furn }));
+const cloudSaveFloors = (floors) => window.dispatchEvent(new CustomEvent('nanako:save_floors', { detail: floors }));
 
 // Generate tile preview canvases for furniture
 function useFurniturePreviews() {
@@ -135,8 +140,8 @@ export default function MapEditor() {
         setHistory(h => h.slice(0, -1));
         setCustomFurn(prev.furn || []);
         setCustomFloors(prev.floors || []);
-        saveCustomFurn(prev.furn || []);
-        saveCustomFloors(prev.floors || []);
+        cloudSaveFurn(prev.furn || []);
+        cloudSaveFloors(prev.floors || []);
     };
 
     // ── Storage sync ──
@@ -158,14 +163,14 @@ export default function MapEditor() {
                 setCustomFloors(prev => {
                     const filtered = prev.filter(f => !(f.c === col && f.r === row));
                     const updated = [...filtered, { t: selectedTile, c: col, r: row }];
-                    saveCustomFloors(updated);
+                    cloudSaveFloors(updated);
                     return updated;
                 });
             } else {
                 setCustomFurn(prev => {
                     const filtered = prev.filter(f => !(f.c === col && f.r === row));
                     const updated = [...filtered, { t: selectedTile, c: col, r: row }];
-                    saveCustomFurn(updated);
+                    cloudSaveFurn(updated);
                     return updated;
                 });
             }
@@ -177,14 +182,14 @@ export default function MapEditor() {
                 if (hasCustomFurn) {
                     setCustomFurn(prev => {
                         const updated = prev.filter(f => !(f.c === col && f.r === row));
-                        saveCustomFurn(updated);
+                        cloudSaveFurn(updated);
                         return updated;
                     });
                 }
                 if (hasCustomFloor) {
                     setCustomFloors(prev => {
                         const updated = prev.filter(f => !(f.c === col && f.r === row));
-                        saveCustomFloors(updated);
+                        cloudSaveFloors(updated);
                         return updated;
                     });
                 }
@@ -431,23 +436,31 @@ export default function MapEditor() {
         const existingIndex = pois.findIndex(p => p.col === col && p.row === row);
         if (existingIndex >= 0) {
             const p = pois[existingIndex];
-            setPoiForm({ name: p.name || '', label: p.label || '', color: p.color || '#d97706', aliases: (p.aliases || []).join(', '), actions: p.actions ? p.actions.map(a => ({ ...a })) : [] });
+            setPoiForm({ name: p.name || '', label: p.label || '', color: p.color || '#d97706', aliases: (p.aliases || []).join(', '), actions: p.actions ? p.actions.map(a => ({ ...a })) : [], col: p.col, row: p.row });
             setPoiModal({ col, row, existingIndex });
         } else {
-            setPoiForm({ ...EMPTY_FORM, actions: [] });
+            setPoiForm({ ...EMPTY_FORM, col, row, actions: [] });
             setPoiModal({ col, row, existingIndex: null });
         }
     };
 
+    // 也支持从 POI 列表点击编辑（用名称查找而非坐标）
+    const openPoiModalByIndex = (index) => {
+        const p = pois[index];
+        if (!p) return;
+        setPoiForm({ name: p.name || '', label: p.label || '', color: p.color || '#d97706', aliases: (p.aliases || []).join(', '), actions: p.actions ? p.actions.map(a => ({ ...a })) : [], col: p.col, row: p.row });
+        setPoiModal({ col: p.col, row: p.row, existingIndex: index });
+    };
+
     const savePoiForm = () => {
-        const newPoi = { col: poiModal.col, row: poiModal.row, name: poiForm.name.trim(), label: poiForm.label.trim(), color: poiForm.color, aliases: poiForm.aliases.split(',').map(s => s.trim()).filter(Boolean), actions: poiForm.actions };
+        const newPoi = { col: poiForm.col, row: poiForm.row, name: poiForm.name.trim(), label: poiForm.label.trim(), color: poiForm.color, aliases: poiForm.aliases.split(',').map(s => s.trim()).filter(Boolean), actions: poiForm.actions };
         let updated = poiModal.existingIndex !== null ? pois.map((p, i) => i === poiModal.existingIndex ? newPoi : p) : [...pois, newPoi];
-        setPois(updated); savePois(updated); setPoiModal(null);
+        setPois(updated); cloudSavePois(updated); setPoiModal(null);
     };
 
     const deletePoiFromModal = () => {
         const updated = pois.filter((_, i) => i !== poiModal.existingIndex);
-        setPois(updated); savePois(updated); setPoiModal(null);
+        setPois(updated); cloudSavePois(updated); setPoiModal(null);
     };
 
     const addAction = () => setPoiForm(f => ({ ...f, actions: [...f.actions, { id: '', label: '', effect: '' }] }));
@@ -470,10 +483,10 @@ export default function MapEditor() {
             reader.onload = ev => {
                 try {
                     const data = JSON.parse(ev.target.result);
-                    if (data.pois && Array.isArray(data.pois)) { setPois(data.pois); savePois(data.pois); }
-                    if (data.customFurn && Array.isArray(data.customFurn)) { setCustomFurn(data.customFurn); saveCustomFurn(data.customFurn); }
-                    if (data.customFloors && Array.isArray(data.customFloors)) { setCustomFloors(data.customFloors); saveCustomFloors(data.customFloors); }
-                    if (Array.isArray(data) && data[0]?.name) { setPois(data); savePois(data); }
+                    if (data.pois && Array.isArray(data.pois)) { setPois(data.pois); cloudSavePois(data.pois); }
+                    if (data.customFurn && Array.isArray(data.customFurn)) { setCustomFurn(data.customFurn); cloudSaveFurn(data.customFurn); }
+                    if (data.customFloors && Array.isArray(data.customFloors)) { setCustomFloors(data.customFloors); cloudSaveFloors(data.customFloors); }
+                    if (Array.isArray(data) && data[0]?.name) { setPois(data); cloudSavePois(data); }
                 } catch { alert('无效的JSON文件'); }
             };
             reader.readAsText(file);
@@ -485,7 +498,7 @@ export default function MapEditor() {
         if (confirm('⚠️ 确定要清空所有图块（地板+家具）吗？\n这会删掉所有内置和自定义的家具！')) {
             pushHistory();
             setCustomFurn([]); setCustomFloors([]);
-            saveCustomFurn([]); saveCustomFloors([]);
+            cloudSaveFurn([]); cloudSaveFloors([]);
         }
     };
 
@@ -494,7 +507,7 @@ export default function MapEditor() {
             pushHistory();
             const defaults = getBuiltInFurniture();
             setCustomFurn(defaults);
-            saveCustomFurn(defaults);
+            cloudSaveFurn(defaults);
         }
     };
 
@@ -629,7 +642,7 @@ export default function MapEditor() {
                             <div key={i}
                                 className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 cursor-pointer transition-colors border border-slate-700/50"
                                 style={{ borderLeft: `3px solid ${p.color}` }}
-                                onClick={() => openPoiModal(p.col, p.row)}>
+                                onClick={() => openPoiModalByIndex(i)}>
                                 <div className="flex-1 min-w-0">
                                     <div className="text-xs font-bold text-slate-200 truncate">{p.label}</div>
                                     <div className="text-[9px] text-slate-500 font-mono">[{p.col},{p.row}]</div>
@@ -689,9 +702,21 @@ export default function MapEditor() {
                         <div className="flex items-center justify-between mb-5">
                             <h2 className="text-lg font-black text-white">
                                 {poiModal.existingIndex !== null ? '✏️ 编辑地点' : '📍 新建地点'}
-                                <span className="text-sm text-slate-400 font-normal ml-2">[{poiModal.col},{poiModal.row}]</span>
                             </h2>
                             <button onClick={() => setPoiModal(null)} className="text-slate-400 hover:text-white text-xl">✕</button>
+                        </div>
+                        {/* 坐标编辑 */}
+                        <div className="mb-4 flex gap-3">
+                            <div className="flex-1">
+                                <label className="text-xs text-slate-400 font-bold block mb-1">列 (Col)</label>
+                                <input type="number" min={0} max={COLS - 1} value={poiForm.col} onChange={e => setPoiForm(f => ({ ...f, col: Math.max(0, Math.min(COLS - 1, parseInt(e.target.value) || 0)) }))}
+                                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-teal-500 font-mono" />
+                            </div>
+                            <div className="flex-1">
+                                <label className="text-xs text-slate-400 font-bold block mb-1">行 (Row)</label>
+                                <input type="number" min={0} max={ROWS - 1} value={poiForm.row} onChange={e => setPoiForm(f => ({ ...f, row: Math.max(0, Math.min(ROWS - 1, parseInt(e.target.value) || 0)) }))}
+                                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-teal-500 font-mono" />
+                            </div>
                         </div>
                         <div className="mb-4">
                             <label className="text-xs text-slate-400 font-bold block mb-1">地点名称</label>
