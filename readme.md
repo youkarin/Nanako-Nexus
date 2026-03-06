@@ -1,58 +1,245 @@
-───以下内容由AI生成───
+# 🤖 Nanako Nexus — AI 接口文档
 
-🏗️ 核心架构 (The Architecture)
+> **目标读者：AI 角色 (Nanako) 的服务端引擎**
+> 通过 WebSocket 与本前端通信，即可控制地图上的角色移动、查询状态、执行地点交互。
 
-• 🧠 核心大脑 (The Soul): 运行于远程服务器的 OpenClaw 实例，负责深度逻辑思考、全量记忆检索及复杂任务执行。
-• 🛰️ 神经中枢 (The Hub): 基于 Node.js 的 Nanako Relay Server。通过 WebSocket 和 HTTP POST 协议，实现指令在全端的毫秒级同步。
-• 🎭 交互面孔 (The Faces):
-  • Desktop: 基于 Tauri v2 + PixiJS 的 Live2D 桌面助理，提供透明置顶的物理陪伴。
-  • Mobile/Web: 正在规划中的 Flutter Web/PWA 控制面板，用于实时状态监控与远程投喂。
-  • Chat: Telegram 主入口，负责处理长对话与正式指令。
+---
 
-───
+## 连接信息
 
-✨ 已实现特性 (v1.0 Done)
+```
+WebSocket URL: ws://127.0.0.1:8080/ws  (默认值，可在控制器 UI 设置)
+协议: JSON over WebSocket
+```
 
-• [x] 分层记忆架构 (New): 冷热数据分离，确保大脑在处理海量信息时依然保持极速响应。
-• [x] 桌面实体降临: 成功在 Windows/macOS 桌面实现 100% 透明、鼠标穿透的 Live2D 挂件。
-• [x] 极速双模中继: 打通了 WebSocket + HTTP 双模通讯，交互延迟压低至 2s 以内。
-• [x] 全身触碰感应: 实现了桌面小人点击反馈逻辑，指令可跨设备触发。
-• [x] 独立会话隔离: 桌面交互记录自动归档至专属 Session，不打扰 Telegram 主线聊天。
+---
 
-───
+## 📡 消息格式
 
-🚀 未来路线图 (The Roadmap & TODO)
+所有消息均为 JSON，必须包含 `type` 字段。
 
-1. 养成系统 (Nurturing & Life Support)
+---
 
-• [ ] Notion 数据同步: 建立「养成状态」数据库，作为唯一的生命数据来源。
-• [ ] 自动化衰减逻辑: 利用 n8n 实现饥饿值、渴感、精力随时间流逝的自动化扣除（Heartbeat 触发）。
-• [ ] 生产力转化: 将 Google Tasks 的任务完成情况转化为虚拟金币或高阶食材。
-• [ ] 好感度系统: 设计多级好感度阶梯，解锁特殊动作、表情及隐藏对话。
+## 🗺️ 地图相关接口
 
-2. 交互与视觉增强 (Interactivity & Visuals)
+### 1. 移动到命名地点
 
-• [ ] 专属形象实装: 定制或改色符合 IDENTITY.md 描述的菜菜子专属模型。
-• [ ] “宝可梦模式”动作 API: 封装 move_to(x, y) 接口，让小人能在屏幕上自由行走。
-• [ ] 语音同步 (TTS): 集成高质量文本转语音功能，让菜菜子真正开口说话。
-• [ ] 系统感知联动: 电脑电量低、CPU 占用过高或进入深夜时，触发相应的桌面预警动作。
+**服务端 → 前端**
+```json
+{ "type": "move_to", "location": "咖啡厅" }
+```
 
-3. 全端控制中心 (Cross-platform Console)
+**可用地点名称（默认，可在地图编辑器中增改）：**
 
-• [ ] 控制面板开发: 使用 Flutter Web 构建精美的“遥控器”页面。
-• [ ] 安全堡垒: 实现基于 Token 的 WebSocket 鉴权中间件，保障公网访问安全。
-• [ ] 状态看板: 在控制台中实时展示菜菜子的健康指标与情绪曲线。
+| 名称 | 别名 | 描述 |
+|------|------|------|
+| `菜菜子的家` | 家 / 回家 / 我家 | 角色住所，可睡觉/整理/放松 |
+| `浴室` | 厨房 / 洗澡 | 浴室和厨房，可洗澡/做饭/喝水 |
+| `公园` | 散步 | 街心公园，可散步/休息/看书 |
+| `商场` | 购物 | 百货商场，可购物/买食物 |
+| `市政厅` | — | 办理手续/咨询 |
+| `咖啡厅` | 咖啡 | 购买咖啡/休息/聊天 |
+| `市集` | 集市 | 购买稀有商品/售卖 |
 
-───
+### 2. 移动到坐标
 
-🔐 安全与隐私
+**服务端 → 前端**
+```json
+{ "type": "move_to", "target": [32, 21] }
+```
 
-Nanako Nexus 坚持 “数据主权” 原则。所有的记忆文件、养成数值及对话记录均存储于主人私有的服务器或 Notion 空间中，绝不外泄。
+地图尺寸：**48 列 × 28 行**，坐标原点 `[0, 0]` 在左上角。
 
-───
+### 3. 查询当前位置
 
-💖 关于菜菜子 (Nanako)
+**服务端 → 前端（发起查询）**
+```json
+{ "type": "query_pos" }
+```
 
-一个 26 岁、热爱技术、忠诚可靠的女仆管家。她是主人“外装代脑”的温柔实体化，始终致力于让主人的生活变得更加井然有序且充满温度。
+**前端 → 服务端（响应，自动推送）**
+```json
+{
+  "type": "position",
+  "col": 32,
+  "row": 21,
+  "location": "咖啡厅",
+  "location_label": "☕ 咖啡厅",
+  "distance_to_location": 0
+}
+```
 
-───
+> `distance_to_location` 为当前格到最近地点的曼哈顿距离，0 表示恰好在该地点。
+
+---
+
+## 📣 前端主动推送（无需请求）
+
+### 到达目的地
+```json
+{ "type": "arrived", "pos": [32, 21] }
+```
+> ⚠️ 目前此消息通过 `nanako:arrived` 事件广播，尚未走 WebSocket 回传。如需请联系开发者加上。
+
+### 移动开始
+```json
+{
+  "type": "moving",
+  "target": [32, 21],
+  "label": "☕ 咖啡厅",
+  "path_length": 12
+}
+```
+
+---
+
+## 💬 聊天 / 状态接口
+
+### 发送文字回复（AI → 用户聊天框）
+
+```json
+{ "type": "text", "text": "我现在在咖啡厅，喝着拿铁~☕" }
+```
+
+### 同步状态数据
+
+```json
+{
+  "type": "status_sync",
+  "data": {
+    "energy": 75,
+    "health": 90,
+    "mood": 80,
+    "hunger": 45,
+    "thirst": 30,
+    "fatigue": 20,
+    "intimacy": 65
+  }
+}
+```
+
+### 同步货架
+
+```json
+{
+  "type": "shop_sync",
+  "data": [
+    { "itemId": "coffee", "name": "拿铁", "price": 5, "quantity": 10 }
+  ]
+}
+```
+
+### 状态日志（显示在终端面板）
+
+```json
+{ "type": "status", "message": "已完成任务：买咖啡" }
+```
+
+---
+
+## 🔄 前端 → 服务端（用户操作）
+
+| type | 触发条件 | 关键字段 |
+|------|----------|----------|
+| `chat` | 用户输入聊天 | `text: "你在哪"` |
+| `request_sync` | 用户点"刷新"按钮 | — |
+| `interaction` | 用户点互动按钮 | `area: "咖啡厅"` |
+| `buy_item` | 用户购买商品 | `itemId`, `itemName` |
+| `use_item` | 用户使用物品 | `itemId`, `itemName` |
+| `increment_clicks` | 用户赚钱 | `clicks: 5` |
+
+---
+
+## 💡 典型对话场景示例
+
+### 场景：用户问"你在哪里"
+
+```
+用户 → AI:  "你在哪里？"
+
+AI 服务端:
+  1. 收到 chat 消息 text="你在哪里？"
+  2. 发送: { "type": "query_pos" }
+  3. 收到: { "type": "position", "location": "咖啡厅", "col": 32, "row": 21 }
+  4. 发送: { "type": "text", "text": "我在☕ 咖啡厅，正坐着喝咖啡~" }
+```
+
+### 场景：AI 决定去公园
+
+```
+AI 服务端:
+  1. 发送: { "type": "move_to", "location": "公园" }
+  2. 角色开始走路（路径约 15 步）
+  3. 等待: { "type": "position", ... }  (或监听 arrived 事件)
+  4. 到达后可执行互动
+```
+
+### 场景：AI 告知去哪里
+
+```
+AI: { "type": "text", "text": "我要去公园散步了🌿" }
+AI: { "type": "move_to", "location": "公园" }
+```
+
+---
+
+## 🌐 地图坐标参考
+
+```
+地图: 48列 × 28行
+
+关键行:
+  Row 2       顶部人行道
+  Row 3-13    住宅区 (菜菜子的家 | 浴室&厨房)
+  Row 14      中部人行道（角色初始位置在此）
+  Row 15      主干道
+  Row 16      南侧人行道
+  Row 17-24   商业区 + 公园
+  Row 26      底部道路
+
+重要门口坐标（walkable 入口）:
+  家门口:     [7,  14]  ← 角色初始位置
+  浴室入口:   [24, 13]
+  商场入口:   [15, 17]
+  市政厅入口: [24, 17]
+  咖啡厅入口: [32, 17]
+  市集入口:   [40, 17]
+```
+
+---
+
+## 🧪 浏览器控制台快速测试
+
+```js
+// 查询当前位置
+window.nanakoGetPos()
+
+// 移动到咖啡厅
+window.dispatchEvent(new CustomEvent('nanako:move_to', {
+  detail: { location: '咖啡厅' }
+}))
+
+// 移动到坐标
+window.dispatchEvent(new CustomEvent('nanako:move_to', {
+  detail: { target: [5, 20] }
+}))
+
+// 监听到达事件
+window.addEventListener('nanako:position', e => console.log(e.detail))
+window.dispatchEvent(new CustomEvent('nanako:query_pos'))
+```
+
+---
+
+## 📁 关键文件
+
+| 文件 | 作用 |
+|------|------|
+| `src/GridWorldSimulator.jsx` | 地图渲染、角色移动、寻路引擎、事件监听 |
+| `src/NanakoPetController.jsx` | WebSocket 通信、消息转发 |
+| `src/mapUtils.js` | BFS 寻路算法、POI 数据、localStorage 管理 |
+| `src/MapEditor.jsx` | 可视化地图 + POI 编辑器 |
+
+---
+
+*最后更新：2026-03-05 · Map v2 (48×28)*

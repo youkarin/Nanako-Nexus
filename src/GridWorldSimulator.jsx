@@ -7,11 +7,19 @@ import { COLS, ROWS, CELL, drawScene, findPath, WALK_GRID, getBuiltInFurniture }
 // ═════════════════════════════════════════════════════════════
 const CHAR_INIT = { col: 7, row: 14 };
 const STEP_MS = 150;
+const CHAR_POS_KEY = 'nanako_char_pos';
+function loadCharPos() {
+    try {
+        const s = localStorage.getItem(CHAR_POS_KEY);
+        if (s) { const p = JSON.parse(s); if (typeof p.col === 'number' && typeof p.row === 'number') return p; }
+    } catch { }
+    return CHAR_INIT;
+}
 
 export default function GridWorldSimulator() {
     const canvasRef = useRef(null), animRef = useRef(null);
     const isDragging = useRef(false), lastMouse = useRef({ x: 0, y: 0 });
-    const charPosRef = useRef(CHAR_INIT), stepTimerRef = useRef(null);
+    const charPosRef = useRef(loadCharPos()), stepTimerRef = useRef(null);
     const charDirRef = useRef('down');
 
     const [zoom, setZoom] = useState(0.65);
@@ -20,12 +28,12 @@ export default function GridWorldSimulator() {
     const [pois, setPois] = useState(loadPois);
     const [customFurn, setCustomFurn] = useState(() => migrateFurniture(getBuiltInFurniture()));
     const [customFloors, setCustomFloors] = useState(loadCustomFloors);
-    const [charPos, setCharPos] = useState(CHAR_INIT);
+    const [charPos, setCharPos] = useState(loadCharPos);
     const [charPath, setCharPath] = useState([]);
     const [charStatus, setCharStatus] = useState('idle');
     const [charLabel, setCharLabel] = useState(null);
 
-    useEffect(() => { charPosRef.current = charPos; }, [charPos]);
+    useEffect(() => { charPosRef.current = charPos; localStorage.setItem(CHAR_POS_KEY, JSON.stringify(charPos)); }, [charPos]);
 
     useEffect(() => {
         const onStorage = e => {
