@@ -21,8 +21,8 @@ function App() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-5 py-2 rounded-xl font-bold transition-all duration-300 text-sm ${activeTab === tab.id
-                ? `${tab.activeColor} text-white scale-105`
-                : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-200'
+              ? `${tab.activeColor} text-white scale-105`
+              : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-200'
               }`}
           >
             {tab.label}
@@ -32,9 +32,15 @@ function App() {
 
       {/* 主体 */}
       <main className="flex-1 w-full h-full">
-        {activeTab === 'controller' && <NanakoPetController />}
-        {activeTab === 'map' && <GridWorldSimulator />}
-        {activeTab === 'editor' && <MapEditor />}
+        <div style={{ display: activeTab === 'controller' ? 'block' : 'none' }}>
+          <NanakoPetController />
+        </div>
+        <div style={{ display: activeTab === 'map' ? 'block' : 'none' }}>
+          <GridWorldSimulator />
+        </div>
+        <div style={{ display: activeTab === 'editor' ? 'block' : 'none' }}>
+          <MapEditor />
+        </div>
       </main>
     </div>
   );
