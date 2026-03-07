@@ -174,6 +174,18 @@ export default function NanakoPetController() {
             window.dispatchEvent(new CustomEvent('nanako:map_sync', { detail: msg }));
             addLog('[MAP] ☁️ 地图数据已云端同步');
           }
+          else if (msg.type === 'pois_updated') {
+            window.dispatchEvent(new CustomEvent('nanako:pois_updated', { detail: msg }));
+            addLog('[MAP] 📍 POI 数据已同步');
+          }
+          else if (msg.type === 'furn_updated') {
+            window.dispatchEvent(new CustomEvent('nanako:furn_updated', { detail: msg }));
+            addLog('[MAP] 🪑 家具数据已同步');
+          }
+          else if (msg.type === 'floors_updated') {
+            window.dispatchEvent(new CustomEvent('nanako:floors_updated', { detail: msg }));
+            addLog('[MAP] 🟧 地板数据已同步');
+          }
           else if (msg.type === 'move_result') {
             if (msg.success) {
               addLog(`[MAP] 🚶 ${msg.message} (${msg.path_length} 步)`);

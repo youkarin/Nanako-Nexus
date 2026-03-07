@@ -150,8 +150,21 @@ export default function GridWorldSimulator() {
             if (d.customFurn) setCustomFurn(d.customFurn);
             if (d.customFloors) setCustomFloors(d.customFloors);
         };
+        // 云端地图编辑器增量更新（pois/furn/floors 单独推送）
+        const onPoisUpdated = (e) => { if (e.detail?.pois) setPois(e.detail.pois); };
+        const onFurnUpdated = (e) => { if (e.detail?.furn) setCustomFurn(e.detail.furn); };
+        const onFloorsUpdated = (e) => { if (e.detail?.floors) setCustomFloors(e.detail.floors); };
+
         window.addEventListener('nanako:map_sync', onMapSync);
-        return () => window.removeEventListener('nanako:map_sync', onMapSync);
+        window.addEventListener('nanako:pois_updated', onPoisUpdated);
+        window.addEventListener('nanako:furn_updated', onFurnUpdated);
+        window.addEventListener('nanako:floors_updated', onFloorsUpdated);
+        return () => {
+            window.removeEventListener('nanako:map_sync', onMapSync);
+            window.removeEventListener('nanako:pois_updated', onPoisUpdated);
+            window.removeEventListener('nanako:furn_updated', onFurnUpdated);
+            window.removeEventListener('nanako:floors_updated', onFloorsUpdated);
+        };
     }, []);
 
     // 云端推送角色到达
