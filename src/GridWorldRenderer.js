@@ -788,7 +788,7 @@ export function drawFloorTile(ctx, floorId, col, row, cs) {
     const ft = FLOOR_TYPES.find(f => f.id === floorId);
     if (!ft) return;
     const x = Math.floor(col * cs), y = Math.floor(row * cs);
-    const w = Math.ceil(cs) + 1, h = Math.ceil(cs) + 1; // +1 to avoid gaps
+    const w = Math.floor((col + 1) * cs) - x, h = Math.floor((row + 1) * cs) - y;
     const useAlt = (col + row) % 2 === 1;
     const color = useAlt ? ft.colors[1] : ft.colors[0];
     ctx.fillStyle = color;
