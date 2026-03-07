@@ -67,9 +67,62 @@ export function buildWalkGrid() {
 }
 export const WALK_GRID = buildWalkGrid();
 
-export function findPath(sc, sr, ec, er) {
+// 构建考虑自定义地板和家具的有效可行走网格
+export function buildEffectiveWalkGrid(customFloors, customFurn = []) {
+    const g = WALK_GRID.map(row => [...row]);
+    if (customFloors && customFloors.length) {
+        for (const f of customFloors) {
+            const { c, r, t } = f;
+            if (c >= 0 && c < COLS && r >= 0 && r < ROWS) {
+                g[r][c] = isFloorWalkable(t);
+            }
+        }
+    }
+    if (customFurn && customFurn.length) {
+        for (const f of customFurn) {
+            const { c, r, t } = f;
+            if (t !== 'rug' && t !== 'rug2' && t !== 'mat') {
+                if (c >= 0 && c < COLS && r >= 0 && r < ROWS) {
+                    g[r][c] = false;
+                }
+            }
+        }
+    }
+    return g;
+}
+
+function findNearestWalkable(col, row, grid) {
+    if (grid[row]?.[col]) return { col, row };
+    let radius = 1;
+    while (radius < 5) { // 最多向外扩展4格寻找
+        for (let dr = -radius; dr <= radius; dr++) {
+            for (let dc = -radius; dc <= radius; dc++) {
+                if (Math.max(Math.abs(dr), Math.abs(dc)) === radius) {
+                    const nc = col + dc;
+                    const nr = row + dr;
+                    if (nc >= 0 && nc < COLS && nr >= 0 && nr < ROWS && grid[nr][nc]) {
+                        return { col: nc, row: nr };
+                    }
+                }
+            }
+        }
+        radius++;
+    }
+    return null;
+}
+
+export function findPath(sc, sr, ec, er, customFloors, customFurn = []) {
     if (sc === ec && sr === er) return [[sc, sr]];
-    if (!WALK_GRID[er]?.[ec]) return null;
+    const grid = customFloors || customFurn.length ? buildEffectiveWalkGrid(customFloors, customFurn) : WALK_GRID;
+
+    // 如果目标不可走，主动寻找最近的可走点
+    if (!grid[er]?.[ec]) {
+        const nearest = findNearestWalkable(ec, er, grid);
+        if (!nearest) return null;
+        ec = nearest.col;
+        er = nearest.row;
+    }
+
     const visited = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
     const prev = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     const D = [[0, -1], [0, 1], [-1, 0], [1, 0]];
@@ -79,7 +132,7 @@ export function findPath(sc, sr, ec, er) {
         if (c === ec && r === er) { const p = []; let u = [ec, er]; while (u) { p.unshift(u); u = prev[u[1]][u[0]]; } return p; }
         for (const [dc, dr] of D) {
             const nc = c + dc, nr = r + dr;
-            if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS || visited[nr][nc] || !WALK_GRID[nr][nc]) continue;
+            if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS || visited[nr][nc] || !grid[nr][nc]) continue;
             visited[nr][nc] = true; prev[nr][nc] = [c, r]; q.push([nc, nr]);
         }
     }

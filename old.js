@@ -134,90 +134,11 @@ function buildWalkGrid() {
 export const WALK_GRID = buildWalkGrid();
 
 // ═══════════════════════════════════════════════════════════════
-//  地板类型可行走信息 (与前端 FLOOR_TYPES 一致)
+//  BFS 寻路（与前端 findPath 完全一致）
 // ═══════════════════════════════════════════════════════════════
-const FLOOR_WALKABLE_MAP = {
-    'f_grass': true, 'f_grass2': true, 'f_road': true, 'f_sidewalk': true,
-    'f_homewall': false, 'f_bedroom': true, 'f_living': true, 'f_kitchen': true,
-    'f_corridor': true, 'f_bathwall': false, 'f_bath': true,
-    'f_parkgrass': true, 'f_parkgrass2': true, 'f_parkpath': true,
-    'f_mallwall': false, 'f_mall': true,
-    'f_citywall': false, 'f_city': true,
-    'f_cafewall': false, 'f_cafe': true,
-    'f_marketwall': false, 'f_market': true,
-    'f_water': false, 'f_sand': true, 'f_stone': true, 'f_dirt': true,
-    'f_empty': true,
-};
-
-function isFloorWalkable(floorId) {
-    return FLOOR_WALKABLE_MAP[floorId] ?? true;
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  构建考虑自定义地板和家具的有效可行走网格
-// ═══════════════════════════════════════════════════════════════
-export function buildEffectiveWalkGrid(customFloors, customFurn = []) {
-    // 从静态网格复制
-    const g = WALK_GRID.map(row => [...row]);
-    // 叠加自定义地板的可行走性
-    if (customFloors && customFloors.length) {
-        for (const f of customFloors) {
-            const { c, r, t } = f;
-            if (c >= 0 && c < COLS && r >= 0 && r < ROWS) {
-                g[r][c] = isFloorWalkable(t);
-            }
-        }
-    }
-    // 叠加自定义家具的阻挡 (家具全部不可行走，除非特殊需求)
-    if (customFurn && customFurn.length) {
-        for (const f of customFurn) {
-            const { c, r, t } = f;
-            // 某些装饰(地毯等)可能不阻挡？暂时假设所有家具/墙壁都会阻挡，如果是地毯rug可能需要放行
-            if (t !== 'rug' && t !== 'rug2' && t !== 'mat') {
-                if (c >= 0 && c < COLS && r >= 0 && r < ROWS) {
-                    g[r][c] = false;
-                }
-            }
-        }
-    }
-    return g;
-}
-
-function findNearestWalkable(col, row, grid) {
-    if (grid[row]?.[col]) return { col, row };
-    let radius = 1;
-    while (radius < 5) { // 最多向外扩展4格寻找
-        for (let dr = -radius; dr <= radius; dr++) {
-            for (let dc = -radius; dc <= radius; dc++) {
-                if (Math.max(Math.abs(dr), Math.abs(dc)) === radius) {
-                    const nc = col + dc;
-                    const nr = row + dr;
-                    if (nc >= 0 && nc < COLS && nr >= 0 && nr < ROWS && grid[nr][nc]) {
-                        return { col: nc, row: nr };
-                    }
-                }
-            }
-        }
-        radius++;
-    }
-    return null;
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  BFS 寻路（考虑自定义地板/家具，并且支持不完全匹配时的临近点回退）
-// ═══════════════════════════════════════════════════════════════
-export function findPath(sc, sr, ec, er, customFloors, customFurn = []) {
+export function findPath(sc, sr, ec, er) {
     if (sc === ec && sr === er) return [[sc, sr]];
-    const grid = customFloors || customFurn.length ? buildEffectiveWalkGrid(customFloors, customFurn) : WALK_GRID;
-
-    // 如果目标不可走，主动寻找最近的可走点
-    if (!grid[er]?.[ec]) {
-        const nearest = findNearestWalkable(ec, er, grid);
-        if (!nearest) return null;
-        ec = nearest.col;
-        er = nearest.row;
-    }
-
+    if (!WALK_GRID[er]?.[ec]) return null;
     const visited = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
     const prev = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     const D = [[0, -1], [0, 1], [-1, 0], [1, 0]];
@@ -233,7 +154,7 @@ export function findPath(sc, sr, ec, er, customFloors, customFurn = []) {
         }
         for (const [dc, dr] of D) {
             const nc = c + dc, nr = r + dr;
-            if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS || visited[nr][nc] || !grid[nr][nc]) continue;
+            if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS || visited[nr][nc] || !WALK_GRID[nr][nc]) continue;
             visited[nr][nc] = true;
             prev[nr][nc] = [c, r];
             q.push([nc, nr]);
@@ -508,7 +429,7 @@ export default class MapEngine extends EventEmitter {
         }
 
         const { col: sc, row: sr } = this.charPos;
-        const pathResult = findPath(sc, sr, ec, er, this.customFloors, this.customFurn);
+        const pathResult = findPath(sc, sr, ec, er);
 
         if (!pathResult) {
             this.charStatus = 'blocked';
@@ -600,8 +521,7 @@ export default class MapEngine extends EventEmitter {
 
     isWalkable(col, row) {
         if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false;
-        const grid = buildEffectiveWalkGrid(this.customFloors, this.customFurn);
-        return grid[row][col];
+        return WALK_GRID[row][col];
     }
 
     findLocation(name) {
@@ -609,7 +529,7 @@ export default class MapEngine extends EventEmitter {
     }
 
     calculatePath(sc, sr, ec, er) {
-        return findPath(sc, sr, ec, er, this.customFloors, this.customFurn);
+        return findPath(sc, sr, ec, er);
     }
 
     /** 销毁引擎，清理定时器 */

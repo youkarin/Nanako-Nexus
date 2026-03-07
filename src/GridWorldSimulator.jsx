@@ -105,14 +105,14 @@ export default function GridWorldSimulator() {
         } else return;
 
         const { col: sc, row: sr } = charPosRef.current;
-        const path = findPath(sc, sr, ec, er);
+        const path = findPath(sc, sr, ec, er, customFloors, customFurn);
         if (!path) {
             setCharStatus('blocked');
             setTimeout(() => setCharStatus('idle'), 1500);
             return;
         }
         startLocalWalk(path, label);
-    }, [pois, startLocalWalk]);
+    }, [pois, customFloors, customFurn, startLocalWalk]);
 
     // ═════════════════════════════════════════════════════════
     //  云端事件监听
