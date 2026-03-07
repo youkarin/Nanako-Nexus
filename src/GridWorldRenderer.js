@@ -748,17 +748,19 @@ export function getBuiltInFurniture() {
 
 // ── Floor tile types for the editor palette ──────────────────
 export const FLOOR_TYPES = [
-    { id: 'f_grass', label: '草地', colors: [C.grass, C.grassAlt] },
+    { id: 'f_grass', label: '草地1', colors: [C.grass, C.grass] },
+    { id: 'f_grass2', label: '草地2', colors: [C.grassAlt, C.grassAlt] },
     { id: 'f_road', label: '道路', colors: [C.road, C.road], isRoad: true },
     { id: 'f_sidewalk', label: '人行道', colors: [C.sidewalk, C.sidewalkEdge] },
-    { id: 'f_homewall', label: '房屋墙壁', colors: [C.homeWall, C.homeTrim] },
+    { id: 'f_homewall', label: '房屋墙壁', colors: [C.homeWall, C.homeWall] },
     { id: 'f_bedroom', label: '卧室地板', colors: [C.bedroomFloor, C.bedroomAlt] },
     { id: 'f_living', label: '客厅地板', colors: [C.livingFloor, C.livingAlt] },
     { id: 'f_kitchen', label: '厨房地板', colors: [C.kitchenFloor, C.kitchenAlt] },
     { id: 'f_corridor', label: '走廊', colors: [C.corridor, C.corridor] },
     { id: 'f_bathwall', label: '浴室墙壁', colors: [C.bathWall, C.bathWall] },
     { id: 'f_bath', label: '浴室地板', colors: [C.bathFloor, C.bathAlt] },
-    { id: 'f_parkgrass', label: '公园草地', colors: [C.parkGrass, C.parkAlt] },
+    { id: 'f_parkgrass', label: '公园草地1', colors: [C.parkGrass, C.parkGrass] },
+    { id: 'f_parkgrass2', label: '公园草地2', colors: [C.parkAlt, C.parkAlt] },
     { id: 'f_parkpath', label: '公园小路', colors: [C.parkPath, C.parkPath] },
     { id: 'f_mallwall', label: '商场墙壁', colors: [C.mallWall, C.mallWall] },
     { id: 'f_mall', label: '商场地板', colors: [C.mallFloor, C.mallAlt] },
