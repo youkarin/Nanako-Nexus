@@ -752,7 +752,7 @@ export const FLOOR_TYPES = [
     { id: 'f_grass', label: '草地1', colors: [C.grass, C.grass], walkable: true },
     { id: 'f_grass2', label: '草地2', colors: [C.grassAlt, C.grassAlt], walkable: true },
     { id: 'f_road', label: '道路', colors: [C.road, C.road], isRoad: true, walkable: true },
-    { id: 'f_sidewalk', label: '人行道', colors: [C.sidewalk, C.sidewalkEdge], walkable: true },
+    { id: 'f_sidewalk', label: '人行道', colors: [C.sidewalk, C.sidewalk], walkable: true },
     { id: 'f_homewall', label: '房屋墙壁', colors: [C.homeWall, C.homeWall], walkable: false },
     { id: 'f_bedroom', label: '卧室地板', colors: [C.bedroomFloor, C.bedroomAlt], walkable: true },
     { id: 'f_living', label: '客厅地板', colors: [C.livingFloor, C.livingAlt], walkable: true },
