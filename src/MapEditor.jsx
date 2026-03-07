@@ -144,15 +144,42 @@ export default function MapEditor() {
         cloudSaveFloors(prev.floors || []);
     };
 
-    // ── Storage sync ──
+    // ── 云端同步状态 ──
+    const [cloudSynced, setCloudSynced] = useState(false);
+
+    // ── 云端 + localStorage 同步 ──
     useEffect(() => {
+        // 云端首次连接：map_sync 包含完整地图快照
+        const onMapSync = (e) => {
+            const d = e.detail;
+            if (d.pois) setPois(d.pois);
+            if (d.customFurn) setCustomFurn(d.customFurn);
+            if (d.customFloors) setCustomFloors(d.customFloors);
+            setCloudSynced(true);
+        };
+        // 云端增量更新（其他客户端编辑 或 自己保存后服务端广播回来）
+        const onPoisUpdated = (e) => { if (e.detail?.pois) setPois(e.detail.pois); };
+        const onFurnUpdated = (e) => { if (e.detail?.furn) setCustomFurn(e.detail.furn); };
+        const onFloorsUpdated = (e) => { if (e.detail?.floors) setCustomFloors(e.detail.floors); };
+        // localStorage 同步（兼容纯本地模式）
         const onStorage = e => {
             if (e.key === POI_KEY || !e.key) setPois(loadPois());
             if (e.key === CUSTOM_FURN_KEY || !e.key) setCustomFurn(loadCustomFurn());
             if (e.key === CUSTOM_FLOOR_KEY || !e.key) setCustomFloors(loadCustomFloors());
         };
+
+        window.addEventListener('nanako:map_sync', onMapSync);
+        window.addEventListener('nanako:pois_updated', onPoisUpdated);
+        window.addEventListener('nanako:furn_updated', onFurnUpdated);
+        window.addEventListener('nanako:floors_updated', onFloorsUpdated);
         window.addEventListener('storage', onStorage);
-        return () => window.removeEventListener('storage', onStorage);
+        return () => {
+            window.removeEventListener('nanako:map_sync', onMapSync);
+            window.removeEventListener('nanako:pois_updated', onPoisUpdated);
+            window.removeEventListener('nanako:furn_updated', onFurnUpdated);
+            window.removeEventListener('nanako:floors_updated', onFloorsUpdated);
+            window.removeEventListener('storage', onStorage);
+        };
     }, []);
 
     // ── Place / erase ──
@@ -571,6 +598,9 @@ export default function MapEditor() {
                 <button onClick={exportJSON} className="px-3 py-1.5 rounded-lg text-sm font-bold bg-slate-700 hover:bg-slate-600">📤 导出</button>
                 <button onClick={importJSON} className="px-3 py-1.5 rounded-lg text-sm font-bold bg-slate-700 hover:bg-slate-600">📥 导入</button>
                 <div className="ml-auto flex items-center gap-3">
+                    <span className={`text-xs font-bold ${cloudSynced ? 'text-emerald-400' : 'text-orange-400 animate-pulse'}`}>
+                        {cloudSynced ? '☁️ 已同步' : '⏳ 等待云端...'}
+                    </span>
                     <span className="text-xs text-sky-400 font-mono">🟧 {customFloors.length} 地板</span>
                     <span className="text-xs text-amber-400 font-mono">🪑 {customFurn.length} 家具</span>
                     <span className="text-xs text-teal-400 font-mono">📍 {pois.length} 地点</span>
