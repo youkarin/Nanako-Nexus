@@ -747,67 +747,91 @@ export function getBuiltInFurniture() {
 }
 
 // ── Floor tile types for the editor palette ──────────────────
+// walkable: true = 可行走, false = 不可行走 (墙壁)
 export const FLOOR_TYPES = [
-    { id: 'f_grass', label: '草地1', colors: [C.grass, C.grass] },
-    { id: 'f_grass2', label: '草地2', colors: [C.grassAlt, C.grassAlt] },
-    { id: 'f_road', label: '道路', colors: [C.road, C.road], isRoad: true },
-    { id: 'f_sidewalk', label: '人行道', colors: [C.sidewalk, C.sidewalkEdge] },
-    { id: 'f_homewall', label: '房屋墙壁', colors: [C.homeWall, C.homeWall] },
-    { id: 'f_bedroom', label: '卧室地板', colors: [C.bedroomFloor, C.bedroomAlt] },
-    { id: 'f_living', label: '客厅地板', colors: [C.livingFloor, C.livingAlt] },
-    { id: 'f_kitchen', label: '厨房地板', colors: [C.kitchenFloor, C.kitchenAlt] },
-    { id: 'f_corridor', label: '走廊', colors: [C.corridor, C.corridor] },
-    { id: 'f_bathwall', label: '浴室墙壁', colors: [C.bathWall, C.bathWall] },
-    { id: 'f_bath', label: '浴室地板', colors: [C.bathFloor, C.bathAlt] },
-    { id: 'f_parkgrass', label: '公园草地1', colors: [C.parkGrass, C.parkGrass] },
-    { id: 'f_parkgrass2', label: '公园草地2', colors: [C.parkAlt, C.parkAlt] },
-    { id: 'f_parkpath', label: '公园小路', colors: [C.parkPath, C.parkPath] },
-    { id: 'f_mallwall', label: '商场墙壁', colors: [C.mallWall, C.mallWall] },
-    { id: 'f_mall', label: '商场地板', colors: [C.mallFloor, C.mallAlt] },
-    { id: 'f_citywall', label: '市政墙壁', colors: [C.cityWall, C.cityWall] },
-    { id: 'f_city', label: '市政地板', colors: [C.cityFloor, C.cityAlt] },
-    { id: 'f_cafewall', label: '咖啡墙壁', colors: [C.cafeWall, C.cafeWall] },
-    { id: 'f_cafe', label: '咖啡地板', colors: [C.cafeFloor, C.cafeAlt] },
-    { id: 'f_marketwall', label: '市集墙壁', colors: [C.marketWall, C.marketWall] },
-    { id: 'f_market', label: '市集地板', colors: [C.marketFloor, C.marketAlt] },
-    { id: 'f_water', label: '水面', colors: ['#2196f3', '#1e88e5'], isWater: true },
-    { id: 'f_sand', label: '沙地', colors: ['#e8d5a0', '#dbc890'] },
-    { id: 'f_stone', label: '石板路', colors: ['#9e9e9e', '#8a8a8a'] },
-    { id: 'f_dirt', label: '泥地', colors: ['#8d6e4c', '#7d5e3c'] },
+    { id: 'f_grass', label: '草地1', colors: [C.grass, C.grass], walkable: true },
+    { id: 'f_grass2', label: '草地2', colors: [C.grassAlt, C.grassAlt], walkable: true },
+    { id: 'f_road', label: '道路', colors: [C.road, C.road], isRoad: true, walkable: true },
+    { id: 'f_sidewalk', label: '人行道', colors: [C.sidewalk, C.sidewalkEdge], walkable: true },
+    { id: 'f_homewall', label: '房屋墙壁', colors: [C.homeWall, C.homeWall], walkable: false },
+    { id: 'f_bedroom', label: '卧室地板', colors: [C.bedroomFloor, C.bedroomAlt], walkable: true },
+    { id: 'f_living', label: '客厅地板', colors: [C.livingFloor, C.livingAlt], walkable: true },
+    { id: 'f_kitchen', label: '厨房地板', colors: [C.kitchenFloor, C.kitchenAlt], walkable: true },
+    { id: 'f_corridor', label: '走廊', colors: [C.corridor, C.corridor], walkable: true },
+    { id: 'f_bathwall', label: '浴室墙壁', colors: [C.bathWall, C.bathWall], walkable: false },
+    { id: 'f_bath', label: '浴室地板', colors: [C.bathFloor, C.bathAlt], walkable: true },
+    { id: 'f_parkgrass', label: '公园草地1', colors: [C.parkGrass, C.parkGrass], walkable: true },
+    { id: 'f_parkgrass2', label: '公园草地2', colors: [C.parkAlt, C.parkAlt], walkable: true },
+    { id: 'f_parkpath', label: '公园小路', colors: [C.parkPath, C.parkPath], walkable: true },
+    { id: 'f_mallwall', label: '商场墙壁', colors: [C.mallWall, C.mallWall], walkable: false },
+    { id: 'f_mall', label: '商场地板', colors: [C.mallFloor, C.mallAlt], walkable: true },
+    { id: 'f_citywall', label: '市政墙壁', colors: [C.cityWall, C.cityWall], walkable: false },
+    { id: 'f_city', label: '市政地板', colors: [C.cityFloor, C.cityAlt], walkable: true },
+    { id: 'f_cafewall', label: '咖啡墙壁', colors: [C.cafeWall, C.cafeWall], walkable: false },
+    { id: 'f_cafe', label: '咖啡地板', colors: [C.cafeFloor, C.cafeAlt], walkable: true },
+    { id: 'f_marketwall', label: '市集墙壁', colors: [C.marketWall, C.marketWall], walkable: false },
+    { id: 'f_market', label: '市集地板', colors: [C.marketFloor, C.marketAlt], walkable: true },
+    { id: 'f_water', label: '水面', colors: ['#2196f3', '#1e88e5'], isWater: true, walkable: false },
+    { id: 'f_sand', label: '沙地', colors: ['#e8d5a0', '#dbc890'], walkable: true },
+    { id: 'f_stone', label: '石板路', colors: ['#9e9e9e', '#8a8a8a'], walkable: true },
+    { id: 'f_dirt', label: '泥地', colors: ['#8d6e4c', '#7d5e3c'], walkable: true },
+    { id: 'f_empty', label: '空地(已擦除)', colors: ['#0d1117', '#0d1117'], walkable: true },
 ];
+
+// Helper: lookup floor walkable
+export function isFloorWalkable(floorId) {
+    const ft = FLOOR_TYPES.find(f => f.id === floorId);
+    return ft ? ft.walkable : true;
+}
 
 export function drawFloorTile(ctx, floorId, col, row, cs) {
     const ft = FLOOR_TYPES.find(f => f.id === floorId);
     if (!ft) return;
-    const x = col * cs, y = row * cs;
+    const x = Math.floor(col * cs), y = Math.floor(row * cs);
+    const w = Math.ceil(cs) + 1, h = Math.ceil(cs) + 1; // +1 to avoid gaps
     const useAlt = (col + row) % 2 === 1;
     const color = useAlt ? ft.colors[1] : ft.colors[0];
     ctx.fillStyle = color;
-    ctx.fillRect(x, y, cs, cs);
+    ctx.fillRect(x, y, w, h);
     // Road: draw center dashed line
     if (ft.isRoad) {
         ctx.fillStyle = C.roadLine;
         ctx.fillRect(x + cs * .1, y + cs * .46, cs * .8, cs * .08);
         ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.fillRect(x, y, cs, cs * .04);
-        ctx.fillRect(x, y + cs - cs * .04, cs, cs * .04);
+        ctx.fillRect(x, y, w, cs * .04);
+        ctx.fillRect(x, y + cs - cs * .04, w, cs * .04);
     }
     // Water: animated shimmer
     if (ft.isWater) {
         const shimmer = 0.07 + Math.sin(Date.now() / 600 + col + row) * 0.04;
         ctx.fillStyle = `rgba(255,255,255,${shimmer})`;
-        ctx.fillRect(x, y, cs, cs);
+        ctx.fillRect(x, y, w, h);
+    }
+    // Empty marker: hatched pattern
+    if (floorId === 'f_empty') {
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + 3, y + 3); ctx.lineTo(x + cs - 3, y + cs - 3);
+        ctx.moveTo(x + cs - 3, y + 3); ctx.lineTo(x + 3, y + cs - 3);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.font = `${Math.max(8, cs * 0.22)}px sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.fillText('∅', x + cs / 2, y + cs / 2);
     }
 }
 
 // ── Main draw ─────────────────────────────────────────────────
 export function drawScene(ctx, W, H, zoom, offset, pois, cCol, cRow, cStatus, cLabel, hovered, cDir, customFurn, customFloors) {
     const cs = CELL * zoom, ox = offset.x, oy = offset.y;
-    const gc = (c, r) => ({ x: Math.round(ox + c * cs), y: Math.round(oy + r * cs) });
+    const gc = (c, r) => ({ x: Math.floor(ox + c * cs), y: Math.floor(oy + r * cs) });
     const fr = (c, r, w, h, col) => {
         const { x, y } = gc(c, r);
-        if (x + w * cs < 0 || y + h * cs < 0 || x > W || y > H) return;
-        ctx.fillStyle = col; ctx.fillRect(x, y, w * cs, h * cs);
+        const { x: x2, y: y2 } = gc(c + w, r + h);
+        if (x2 < 0 || y2 < 0 || x > W || y > H) return;
+        ctx.fillStyle = col; ctx.fillRect(x, y, x2 - x + 1, y2 - y + 1);
     };
 
     ctx.clearRect(0, 0, W, H);

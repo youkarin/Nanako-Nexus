@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { loadPois, POI_KEY, loadCustomFurn, CUSTOM_FURN_KEY, loadCustomFloors, CUSTOM_FLOOR_KEY, migrateFurniture } from './mapUtils';
-import { COLS, ROWS, CELL, drawScene, drawFurniture, drawFloorTile, C, FURN, TREES, WALK_GRID, FLOOR_TYPES, getBuiltInFurniture } from './GridWorldRenderer';
+import { COLS, ROWS, CELL, drawScene, drawFurniture, drawFloorTile, C, FURN, TREES, WALK_GRID, FLOOR_TYPES, getBuiltInFurniture, isFloorWalkable } from './GridWorldRenderer';
 
 // ============================================================
 //  MAP EDITOR  v4 — Tile palette (floors + furniture) + paint
@@ -140,12 +140,28 @@ export default function MapEditor() {
         setHistory(h => h.slice(0, -1));
         setCustomFurn(prev.furn || []);
         setCustomFloors(prev.floors || []);
-        cloudSaveFurn(prev.furn || []);
-        cloudSaveFloors(prev.floors || []);
+        setHasDirty(true);
     };
 
     // ── 云端同步状态 ──
     const [cloudSynced, setCloudSynced] = useState(false);
+
+    // ── Dirty tracking: 未保存的修改 ──
+    const [hasDirty, setHasDirty] = useState(false);
+    // 记录上次保存时的快照（用于判断哪些是新增/修改的）
+    const [savedFurnSnapshot, setSavedFurnSnapshot] = useState(null);
+    const [savedFloorsSnapshot, setSavedFloorsSnapshot] = useState(null);
+
+    // 检查某个 item 是否是未保存的
+    const isFurnDirty = useCallback((f) => {
+        if (!savedFurnSnapshot) return true; // 没有保存过，都算dirty... 但初始数据也是从云端来的
+        return !savedFurnSnapshot.some(s => s.c === f.c && s.r === f.r && s.t === f.t);
+    }, [savedFurnSnapshot]);
+
+    const isFloorDirty = useCallback((f) => {
+        if (!savedFloorsSnapshot) return true;
+        return !savedFloorsSnapshot.some(s => s.c === f.c && s.r === f.r && s.t === f.t);
+    }, [savedFloorsSnapshot]);
 
     // ── 云端 + localStorage 同步 ──
     useEffect(() => {
@@ -153,14 +169,15 @@ export default function MapEditor() {
         const onMapSync = (e) => {
             const d = e.detail;
             if (d.pois) setPois(d.pois);
-            if (d.customFurn) setCustomFurn(d.customFurn);
-            if (d.customFloors) setCustomFloors(d.customFloors);
+            if (d.customFurn) { setCustomFurn(d.customFurn); setSavedFurnSnapshot(JSON.parse(JSON.stringify(d.customFurn))); }
+            if (d.customFloors) { setCustomFloors(d.customFloors); setSavedFloorsSnapshot(JSON.parse(JSON.stringify(d.customFloors))); }
             setCloudSynced(true);
+            setHasDirty(false);
         };
         // 云端增量更新（其他客户端编辑 或 自己保存后服务端广播回来）
         const onPoisUpdated = (e) => { if (e.detail?.pois) setPois(e.detail.pois); };
-        const onFurnUpdated = (e) => { if (e.detail?.furn) setCustomFurn(e.detail.furn); };
-        const onFloorsUpdated = (e) => { if (e.detail?.floors) setCustomFloors(e.detail.floors); };
+        const onFurnUpdated = (e) => { if (e.detail?.furn) { setCustomFurn(e.detail.furn); setSavedFurnSnapshot(JSON.parse(JSON.stringify(e.detail.furn))); setHasDirty(false); } };
+        const onFloorsUpdated = (e) => { if (e.detail?.floors) { setCustomFloors(e.detail.floors); setSavedFloorsSnapshot(JSON.parse(JSON.stringify(e.detail.floors))); setHasDirty(false); } };
         // localStorage 同步（兼容纯本地模式）
         const onStorage = e => {
             if (e.key === POI_KEY || !e.key) setPois(loadPois());
@@ -189,37 +206,34 @@ export default function MapEditor() {
             if (isFloorTile) {
                 setCustomFloors(prev => {
                     const filtered = prev.filter(f => !(f.c === col && f.r === row));
-                    const updated = [...filtered, { t: selectedTile, c: col, r: row }];
-                    cloudSaveFloors(updated);
-                    return updated;
+                    return [...filtered, { t: selectedTile, c: col, r: row }];
                 });
             } else {
                 setCustomFurn(prev => {
                     const filtered = prev.filter(f => !(f.c === col && f.r === row));
-                    const updated = [...filtered, { t: selectedTile, c: col, r: row }];
-                    cloudSaveFurn(updated);
-                    return updated;
+                    return [...filtered, { t: selectedTile, c: col, r: row }];
                 });
             }
+            setHasDirty(true);
         } else if (tool === 'erase') {
-            const hasCustomFurn = customFurn.some(f => f.c === col && f.r === row);
-            const hasCustomFloor = customFloors.some(f => f.c === col && f.r === row);
-            if (hasCustomFurn || hasCustomFloor) {
+            // 优先擦除家具，其次地板，还能擦除内置地板变为空地
+            const hasFurn = customFurn.some(f => f.c === col && f.r === row);
+            const hasFloor = customFloors.some(f => f.c === col && f.r === row);
+            if (hasFurn) {
                 pushHistory();
-                if (hasCustomFurn) {
-                    setCustomFurn(prev => {
-                        const updated = prev.filter(f => !(f.c === col && f.r === row));
-                        cloudSaveFurn(updated);
-                        return updated;
-                    });
-                }
-                if (hasCustomFloor) {
-                    setCustomFloors(prev => {
-                        const updated = prev.filter(f => !(f.c === col && f.r === row));
-                        cloudSaveFloors(updated);
-                        return updated;
-                    });
-                }
+                setCustomFurn(prev => prev.filter(f => !(f.c === col && f.r === row)));
+                setHasDirty(true);
+            } else if (hasFloor) {
+                const existingFloor = customFloors.find(f => f.c === col && f.r === row);
+                if (existingFloor && existingFloor.t === 'f_empty') return; // 已经是空地了
+                pushHistory();
+                setCustomFloors(prev => prev.filter(f => !(f.c === col && f.r === row)));
+                setHasDirty(true);
+            } else {
+                // 擦除内置地板：放一个 f_empty
+                pushHistory();
+                setCustomFloors(prev => [...prev.filter(f => !(f.c === col && f.r === row)), { t: 'f_empty', c: col, r: row }]);
+                setHasDirty(true);
             }
         }
     }, [tool, selectedTile, isFloorTile, customFurn, customFloors]);
@@ -234,16 +248,23 @@ export default function MapEditor() {
         // Draw the same scene as GridWorldSimulator (no character) + custom items
         drawScene(ctx, W, H, zoom, offset, pois, -99, -99, 'idle', null, null, 'down', customFurn, customFloors);
 
-        // ── Walkability overlay ──
+        // ── Walkability overlay (基于地板类型的 walkable 属性) ──
         if (showWalk) {
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) {
-                    const x = Math.round(ox + c * cs);
-                    const y = Math.round(oy + r * cs);
+                    const x = Math.floor(ox + c * cs);
+                    const y = Math.floor(oy + r * cs);
                     if (x + cs < 0 || y + cs < 0 || x > W || y > H) continue;
-                    const walkable = WALK_GRID[r]?.[c];
+                    // 检查自定义地板的 walkable
+                    const cfr = customFloors.find(f => f.c === c && f.r === r);
+                    let walkable;
+                    if (cfr) {
+                        walkable = isFloorWalkable(cfr.t);
+                    } else {
+                        walkable = WALK_GRID[r]?.[c] ?? true;
+                    }
                     ctx.fillStyle = walkable ? 'rgba(52,211,153,0.18)' : 'rgba(239,68,68,0.22)';
-                    ctx.fillRect(x, y, cs, cs);
+                    ctx.fillRect(x, y, Math.ceil(cs), Math.ceil(cs));
                     if (!walkable) {
                         ctx.strokeStyle = 'rgba(239,68,68,0.35)';
                         ctx.lineWidth = 1;
@@ -285,26 +306,30 @@ export default function MapEditor() {
             }
         }
 
-        // ── Custom item markers (small dots) ──
-        customFurn.forEach(f => {
-            const x = Math.round(ox + f.c * cs);
-            const y = Math.round(oy + f.r * cs);
-            if (x + cs < 0 || y + cs < 0 || x > W || y > H) return;
-            ctx.fillStyle = 'rgba(251,191,36,0.85)';
-            ctx.beginPath(); ctx.arc(x + cs - 5, y + 5, 3, 0, Math.PI * 2); ctx.fill();
-        });
-        customFloors.forEach(f => {
-            const x = Math.round(ox + f.c * cs);
-            const y = Math.round(oy + f.r * cs);
-            if (x + cs < 0 || y + cs < 0 || x > W || y > H) return;
-            ctx.fillStyle = 'rgba(56,189,248,0.7)';
-            ctx.beginPath(); ctx.arc(x + 5, y + cs - 5, 3, 0, Math.PI * 2); ctx.fill();
-        });
+        // ── Custom item markers (small dots) ─— 只在未保存时显示 ──
+        if (hasDirty) {
+            customFurn.forEach(f => {
+                if (!isFurnDirty(f)) return;
+                const x = Math.floor(ox + f.c * cs);
+                const y = Math.floor(oy + f.r * cs);
+                if (x + cs < 0 || y + cs < 0 || x > W || y > H) return;
+                ctx.fillStyle = 'rgba(251,191,36,0.85)';
+                ctx.beginPath(); ctx.arc(x + cs - 5, y + 5, 3, 0, Math.PI * 2); ctx.fill();
+            });
+            customFloors.forEach(f => {
+                if (!isFloorDirty(f)) return;
+                const x = Math.floor(ox + f.c * cs);
+                const y = Math.floor(oy + f.r * cs);
+                if (x + cs < 0 || y + cs < 0 || x > W || y > H) return;
+                ctx.fillStyle = 'rgba(56,189,248,0.7)';
+                ctx.beginPath(); ctx.arc(x + 5, y + cs - 5, 3, 0, Math.PI * 2); ctx.fill();
+            });
+        }
 
         // ── POI highlight rings ──
         pois.forEach(p => {
-            const x = Math.round(ox + p.col * cs);
-            const y = Math.round(oy + p.row * cs);
+            const x = Math.floor(ox + p.col * cs);
+            const y = Math.floor(oy + p.row * cs);
             if (x + cs < 0 || y + cs < 0 || x > W || y > H) return;
             const pulse = 0.7 + Math.sin(Date.now() / 400) * 0.3;
             ctx.strokeStyle = p.color || '#d97706';
@@ -316,8 +341,8 @@ export default function MapEditor() {
 
         // ── Hover highlight + ghost preview ──
         if (hovered) {
-            const x = Math.round(ox + hovered.col * cs);
-            const y = Math.round(oy + hovered.row * cs);
+            const x = Math.floor(ox + hovered.col * cs);
+            const y = Math.floor(oy + hovered.row * cs);
             const existingCustomF = customFurn.find(f => f.c === hovered.col && f.r === hovered.row);
             const existingCustomFl = customFloors.find(f => f.c === hovered.col && f.r === hovered.row);
             const existingPoi = pois.find(p => p.col === hovered.col && p.row === hovered.row);
@@ -368,7 +393,13 @@ export default function MapEditor() {
             }
 
             // Info tooltip
-            const walkable = WALK_GRID[hovered.row]?.[hovered.col];
+            const cfr = customFloors.find(f => f.c === hovered.col && f.r === hovered.row);
+            let walkable;
+            if (cfr) {
+                walkable = isFloorWalkable(cfr.t);
+            } else {
+                walkable = WALK_GRID[hovered.row]?.[hovered.col] ?? true;
+            }
             let infoText = `[${hovered.col},${hovered.row}]`;
             if (existingCustomFl) infoText += ` · 🟧 ${FLOOR_TYPES.find(t => t.id === existingCustomFl.t)?.label || existingCustomFl.t}`;
             if (existingCustomF) infoText += ` · 🪑 ${FURNITURE_TYPES.find(t => t.id === existingCustomF.t)?.label || existingCustomF.t}`;
@@ -386,7 +417,7 @@ export default function MapEditor() {
             ctx.fillStyle = '#fff';
             ctx.fillText(infoText, bx + 6, by - 3);
         }
-    }, [zoom, offset, pois, hovered, showGrid, showWalk, showCoords, tool, selectedTile, isFloorTile, customFurn, customFloors]);
+    }, [zoom, offset, pois, hovered, showGrid, showWalk, showCoords, tool, selectedTile, isFloorTile, customFurn, customFloors, hasDirty, isFurnDirty, isFloorDirty]);
 
     useEffect(() => {
         const loop = () => { draw(); animRef.current = requestAnimationFrame(loop); };
@@ -482,12 +513,12 @@ export default function MapEditor() {
     const savePoiForm = () => {
         const newPoi = { col: poiForm.col, row: poiForm.row, name: poiForm.name.trim(), label: poiForm.label.trim(), color: poiForm.color, aliases: poiForm.aliases.split(',').map(s => s.trim()).filter(Boolean), actions: poiForm.actions };
         let updated = poiModal.existingIndex !== null ? pois.map((p, i) => i === poiModal.existingIndex ? newPoi : p) : [...pois, newPoi];
-        setPois(updated); cloudSavePois(updated); setPoiModal(null);
+        setPois(updated); setHasDirty(true); setPoiModal(null);
     };
 
     const deletePoiFromModal = () => {
         const updated = pois.filter((_, i) => i !== poiModal.existingIndex);
-        setPois(updated); cloudSavePois(updated); setPoiModal(null);
+        setPois(updated); setHasDirty(true); setPoiModal(null);
     };
 
     const addAction = () => setPoiForm(f => ({ ...f, actions: [...f.actions, { id: '', label: '', effect: '' }] }));
@@ -510,10 +541,11 @@ export default function MapEditor() {
             reader.onload = ev => {
                 try {
                     const data = JSON.parse(ev.target.result);
-                    if (data.pois && Array.isArray(data.pois)) { setPois(data.pois); cloudSavePois(data.pois); }
-                    if (data.customFurn && Array.isArray(data.customFurn)) { setCustomFurn(data.customFurn); cloudSaveFurn(data.customFurn); }
-                    if (data.customFloors && Array.isArray(data.customFloors)) { setCustomFloors(data.customFloors); cloudSaveFloors(data.customFloors); }
-                    if (Array.isArray(data) && data[0]?.name) { setPois(data); cloudSavePois(data); }
+                    if (data.pois && Array.isArray(data.pois)) { setPois(data.pois); }
+                    if (data.customFurn && Array.isArray(data.customFurn)) { setCustomFurn(data.customFurn); }
+                    if (data.customFloors && Array.isArray(data.customFloors)) { setCustomFloors(data.customFloors); }
+                    if (Array.isArray(data) && data[0]?.name) { setPois(data); }
+                    setHasDirty(true);
                 } catch { alert('无效的JSON文件'); }
             };
             reader.readAsText(file);
@@ -521,20 +553,35 @@ export default function MapEditor() {
         input.click();
     };
 
+    // ── Save: 手动保存并同步到云端 ──
+    const saveToCloud = () => {
+        cloudSaveFurn(customFurn);
+        cloudSaveFloors(customFloors);
+        cloudSavePois(pois);
+        setSavedFurnSnapshot(JSON.parse(JSON.stringify(customFurn)));
+        setSavedFloorsSnapshot(JSON.parse(JSON.stringify(customFloors)));
+        setHasDirty(false);
+    };
+
     const clearAll = () => {
-        if (confirm('⚠️ 确定要清空所有图块（地板+家具）吗？\n这会删掉所有内置和自定义的家具！')) {
+        if (!hasDirty) {
+            alert('ℹ️ 没有未保存的修改，无需清空');
+            return;
+        }
+        if (confirm('⚠️ 确定要清空所有未保存的修改吗？\n这会把地图恢复到上次保存的状态。')) {
             pushHistory();
-            setCustomFurn([]); setCustomFloors([]);
-            cloudSaveFurn([]); cloudSaveFloors([]);
+            if (savedFurnSnapshot) setCustomFurn(savedFurnSnapshot);
+            if (savedFloorsSnapshot) setCustomFloors(savedFloorsSnapshot);
+            setHasDirty(false);
         }
     };
 
     const resetToDefaults = () => {
-        if (confirm('🔄 确定要恢复默认家具布局吗？\n这会把所有家具重置为初始状态（自定义地板保留）。')) {
+        if (confirm('🔄 确定要恢复默认家具布局吗？\n这会把所有家具重置为初始状态（自定义地板保留）。\n需要手动保存才会同步到云端。')) {
             pushHistory();
             const defaults = getBuiltInFurniture();
             setCustomFurn(defaults);
-            cloudSaveFurn(defaults);
+            setHasDirty(true);
         }
     };
 
@@ -574,11 +621,16 @@ export default function MapEditor() {
                     {toolBtn('info', '🔍', '查看', 'bg-violet-600')}
                 </div>
                 <div className="w-px h-6 bg-slate-700" />
+                <button onClick={saveToCloud}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-black transition-all ${hasDirty ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse shadow-lg shadow-emerald-500/30' : 'bg-slate-700 text-slate-500 cursor-default'}`}
+                    disabled={!hasDirty}>
+                    💾 保存
+                </button>
                 <button onClick={undo} disabled={!history.length} title="撤销"
                     className={`px-2 py-1.5 rounded-lg text-sm font-bold ${history.length ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-800 text-slate-600 cursor-not-allowed'}`}>
                     ↩ 撤销
                 </button>
-                <button onClick={clearAll} className="px-2 py-1.5 rounded-lg text-sm font-bold bg-slate-700 hover:bg-red-700 text-slate-300">
+                <button onClick={clearAll} className="px-2 py-1.5 rounded-lg text-sm font-bold bg-slate-700 hover:bg-red-700 text-slate-300" title="清空未保存的修改">
                     🗑 清空
                 </button>
                 <button onClick={resetToDefaults} className="px-2 py-1.5 rounded-lg text-sm font-bold bg-slate-700 hover:bg-emerald-700 text-slate-300" title="恢复所有家具到默认布局">
@@ -598,8 +650,8 @@ export default function MapEditor() {
                 <button onClick={exportJSON} className="px-3 py-1.5 rounded-lg text-sm font-bold bg-slate-700 hover:bg-slate-600">📤 导出</button>
                 <button onClick={importJSON} className="px-3 py-1.5 rounded-lg text-sm font-bold bg-slate-700 hover:bg-slate-600">📥 导入</button>
                 <div className="ml-auto flex items-center gap-3">
-                    <span className={`text-xs font-bold ${cloudSynced ? 'text-emerald-400' : 'text-orange-400 animate-pulse'}`}>
-                        {cloudSynced ? '☁️ 已同步' : '⏳ 等待云端...'}
+                    <span className={`text-xs font-bold ${hasDirty ? 'text-amber-400 animate-pulse' : cloudSynced ? 'text-emerald-400' : 'text-orange-400 animate-pulse'}`}>
+                        {hasDirty ? '✏️ 有未保存修改' : cloudSynced ? '☁️ 已同步' : '⏳ 等待云端...'}
                     </span>
                     <span className="text-xs text-sky-400 font-mono">🟧 {customFloors.length} 地板</span>
                     <span className="text-xs text-amber-400 font-mono">🪑 {customFurn.length} 家具</span>
@@ -632,11 +684,14 @@ export default function MapEditor() {
 
                         {paletteOpen && paletteTab === 'floor' && (
                             <div className="p-2 grid grid-cols-4 gap-1.5 max-h-[40vh] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-                                {FLOOR_TYPES.map(({ id, label }) => (
+                                {FLOOR_TYPES.filter(f => f.id !== 'f_empty').map(({ id, label, walkable }) => (
                                     <button key={id} onClick={() => { setSelectedTile(id); setTool('paint'); }}
-                                        title={label}
+                                        title={`${label} ${walkable ? '(可行走)' : '(不可行走/墙壁)'}`}
                                         className={`relative rounded-lg overflow-hidden border-2 transition-all hover:scale-105 ${selectedTile === id && tool === 'paint' ? 'border-sky-400 ring-2 ring-sky-400/40 scale-105' : 'border-slate-600 hover:border-slate-500'}`}>
                                         <img src={floorPreviews[id]} alt={label} className="w-full aspect-square block" style={{ imageRendering: 'pixelated' }} />
+                                        <div className="absolute top-0 right-0 text-[8px] px-0.5 rounded-bl" style={{ background: walkable ? 'rgba(52,211,153,0.7)' : 'rgba(239,68,68,0.7)' }}>
+                                            {walkable ? '✓' : '✕'}
+                                        </div>
                                         <div className="absolute bottom-0 inset-x-0 bg-black/70 text-[9px] text-slate-300 text-center py-0.5 leading-tight truncate px-0.5">
                                             {label}
                                         </div>
@@ -695,13 +750,13 @@ export default function MapEditor() {
                         {tool === 'paint'
                             ? <span className={`${isFloorTile ? 'text-sky-400' : 'text-amber-400'} font-bold`}>🖌️ 绘制 · {isFloorTile ? '地板' : '家具'} · 当前: {getSelectedLabel()}</span>
                             : tool === 'erase'
-                                ? <span className="text-red-400 font-bold">🧹 擦除 · 点击/拖拽擦除自定义图块</span>
+                                ? <span className="text-red-400 font-bold">🧹 擦除 · 优先擦家具→地板→内置地板(变空地)</span>
                                 : tool === 'poi'
                                     ? <span className="text-teal-400 font-bold">📍 点击格子编辑地点</span>
                                     : <span className="text-violet-400 font-bold">🔍 悬停查看详情</span>
                         }
                         {hovered && <span className="text-amber-400 font-mono">[{hovered.col},{hovered.row}]</span>}
-                        <span className="ml-auto text-slate-500 text-[10px]">右键/中键拖拽 · 滚轮缩放 · 自动同步</span>
+                        <span className="ml-auto text-slate-500 text-[10px]">右键/中键拖拽 · 滚轮缩放 · 💾保存后同步</span>
                     </div>
                     <canvas ref={canvasRef}
                         className="flex-1 block w-full h-full"
@@ -719,10 +774,11 @@ export default function MapEditor() {
             {/* ── Legend strip ── */}
             <div className="bg-slate-900 border-t border-slate-700 px-4 py-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500">
                 <span>🖌️ 绘制: 选图块后点击/拖拽放置</span>
-                <span>🧹 擦除: 删除自定义地板和家具</span>
+                <span>🧹 擦除: 家具→地板→内置(变空地)</span>
                 <span>📍 地点: POI管理</span>
                 <span>↩ 支持撤销</span>
-                <span>💾 自动保存并同步世界地图</span>
+                <span>💾 手动保存后同步到云端</span>
+                <span>🗑 清空: 仅清除未保存的修改</span>
             </div>
 
             {/* ══════════ POI Edit Modal ══════════ */}
